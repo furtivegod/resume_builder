@@ -70,6 +70,9 @@ interface ResumeTabState {
   lastModelUsed?: string;
   questionsText: string;
   lastJd: string;
+  draftJobRole: string;
+  draftCompanyName: string;
+  draftJd: string;
   coverLetter: string;
   answers: QuestionAnswer[];
 }
@@ -93,6 +96,9 @@ function createTab(
     lastModelUsed: undefined,
     questionsText: "",
     lastJd: "",
+    draftJobRole: "",
+    draftCompanyName: "",
+    draftJd: "",
     coverLetter: "",
     answers: [],
   };
@@ -338,6 +344,12 @@ export default function Home() {
             </div>
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <ResumeForm
+                jobRole={activeTab.draftJobRole}
+                companyName={activeTab.draftCompanyName}
+                jd={activeTab.draftJd}
+                onJobRoleChange={(value) => patchTab(activeTab.id, { draftJobRole: value })}
+                onCompanyNameChange={(value) => patchTab(activeTab.id, { draftCompanyName: value })}
+                onJdChange={(value) => patchTab(activeTab.id, { draftJd: value })}
                 onSubmit={(jd, resumeContent, template, profileData, jobRole, companyName) =>
                   handleSubmit(activeTab.id, jd, resumeContent, template, profileData, activeTab.currentApiProvider, jobRole, companyName)
                 }

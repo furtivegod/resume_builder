@@ -6,10 +6,17 @@ import { UpdatedResume, ResumeExperience } from "@/app/page";
 import {
   DEFAULT_RESUME_TEMPLATE,
   RESUME_TEMPLATES,
+  resolveResumeTemplate,
   type ResumeTemplateId,
 } from "@/lib/resume-templates";
 
 interface ResumeFormProps {
+  jobRole: string;
+  companyName: string;
+  jd: string;
+  onJobRoleChange: (value: string) => void;
+  onCompanyNameChange: (value: string) => void;
+  onJdChange: (value: string) => void;
   onSubmit: (
     jd: string,
     resumeContent: string,
@@ -22,12 +29,15 @@ interface ResumeFormProps {
 }
 
 export default function ResumeForm({
+  jobRole,
+  companyName,
+  jd,
+  onJobRoleChange,
+  onCompanyNameChange,
+  onJdChange,
   onSubmit,
   loading,
 }: ResumeFormProps) {
-  const [jobRole, setJobRole] = useState("");
-  const [companyName, setCompanyName] = useState("");
-  const [jd, setJd] = useState("");
   const [resumeContent, setResumeContent] = useState("");
   const [loadingPrefs, setLoadingPrefs] = useState(true);
   const [profileData, setProfileData] = useState<any>(null);
@@ -58,8 +68,8 @@ export default function ResumeForm({
         const { preferences } = await response.json();
         setProfileData(preferences);
         const savedTemplate = (preferences.default_resume as Record<string, unknown> | undefined)
-          ?.resume_template;
-        setResumeTemplate(savedTemplate === "ledger" ? "ledger" : DEFAULT_RESUME_TEMPLATE);
+          ?.resume_template as string | undefined;
+        setResumeTemplate(resolveResumeTemplate(savedTemplate));
 
         // Build resume content from stored preferences
         if (
@@ -196,11 +206,11 @@ export default function ResumeForm({
       <div className="flex-shrink-0 grid grid-cols-2 gap-3">
         <div>
           <label htmlFor="jobRole" className="mb-1 block text-xs font-medium text-slate-600">Job Title</label>
-          <input id="jobRole" type="text" value={jobRole} onChange={(e) => setJobRole(e.target.value)} placeholder="e.g. Senior Engineer" className="input-shell" />
+          <input id="jobRole" type="text" value={jobRole} onChange={(e) => onJobRoleChange(e.target.value)} placeholder="e.g. Senior Engineer" className="input-shell" />
         </div>
         <div>
           <label htmlFor="companyName" className="mb-1 block text-xs font-medium text-slate-600">Company</label>
-          <input id="companyName" type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="e.g. Acme Corp" className="input-shell" />
+          <input id="companyName" type="text" value={companyName} onChange={(e) => onCompanyNameChange(e.target.value)} placeholder="e.g. Acme Corp" className="input-shell" />
         </div>
       </div>
 
@@ -209,7 +219,7 @@ export default function ResumeForm({
         <textarea
           id="jd"
           value={jd}
-          onChange={(e) => setJd(e.target.value)}
+          onChange={(e) => onJdChange(e.target.value)}
           placeholder="Paste the full job description here…"
           className="input-shell flex-1 resize-none"
           required

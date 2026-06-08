@@ -8,6 +8,7 @@ import { UpdatedResume, ResumeExperience } from "@/app/page";
 import {
   DEFAULT_RESUME_TEMPLATE,
   RESUME_TEMPLATES,
+  resolveResumeTemplate,
   type ResumeTemplateId,
 } from "@/lib/resume-templates";
 
@@ -73,9 +74,8 @@ export default function ProfilePage() {
         ]);
         const savedResume = preferences.default_resume as Record<string, unknown> | undefined;
         setDownloadPath((savedResume?.download_path as string) || "");
-        const savedTemplate = savedResume?.resume_template as string | undefined;
         setResumeTemplate(
-          savedTemplate === "ledger" ? "ledger" : DEFAULT_RESUME_TEMPLATE
+          resolveResumeTemplate(savedResume?.resume_template as string | undefined)
         );
       }
     } catch (error) {
