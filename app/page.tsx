@@ -228,7 +228,13 @@ export default function Home() {
           let errorMessage = "Failed to generate resume";
           try {
             const errorData = await response.json();
-            errorMessage = errorData.error || errorMessage;
+            errorMessage =
+              typeof errorData.error === "string" && errorData.error.trim()
+                ? errorData.error
+                : errorMessage;
+            if (errorData.diagnostics) {
+              console.error("Resume JSON diagnostics:", errorData.diagnostics);
+            }
           } catch {
             try {
               const errorText = await response.text();
@@ -365,7 +371,9 @@ export default function Home() {
             </p>
             <div className="min-h-0 flex-1 overflow-y-auto pr-1">
               {activeTab.error && (
-                <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{activeTab.error}</div>
+                <div className="mb-3 max-h-[70vh] overflow-y-auto rounded-xl border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-800 whitespace-pre-wrap font-mono">
+                  {activeTab.error}
+                </div>
               )}
               {activeTab.loading && (
                 <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-3">

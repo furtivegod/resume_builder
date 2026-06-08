@@ -11,6 +11,11 @@ import {
   getTenureYears,
 } from "@/lib/resume-bullets";
 import {
+  cleanJsonText,
+  diagnoseJsonParseFailure,
+  formatJsonParseErrorMessage,
+} from "@/lib/analyze-json";
+import {
   DEFAULT_RESUME_TEMPLATE,
   isValidResumeTemplate,
 } from "@/lib/resume-templates";
@@ -83,18 +88,6 @@ ${resumeContent}${bulletGuidance}`;
     // Deepseek responses can be cut for long resumes; allow a larger completion budget.
     const generationMaxTokens = apiProvider === "deepseek" ? 8192 : 4096;
 
-    const parseJsonSafely = (input: string) => {
-      let cleanedJsonText = String(input || "").trim();
-      if (cleanedJsonText.startsWith("```json")) {
-        cleanedJsonText = cleanedJsonText
-          .replace(/```json\n?/g, "")
-          .replace(/```\n?/g, "");
-      } else if (cleanedJsonText.startsWith("```")) {
-        cleanedJsonText = cleanedJsonText.replace(/```\n?/g, "");
-      }
-      return JSON.parse(cleanedJsonText);
-    };
-
     const sanitizeJobTitle = (rawTitle: unknown): string => {
       const original = String(rawTitle || "").trim().replace(/\s+/g, " ");
       if (!original) return "";
@@ -141,53 +134,60 @@ ${resumeContent}${bulletGuidance}`;
       throw err;
     }
 
-    // Parse the JSON response (works for both APIs)
-    try {
-      analysisResult = parseJsonSafely(jsonText);
-    } catch (parseError) {
-      // Retry once by asking the same provider to repair malformed/truncated JSON.
-      console.warn("Initial JSON parse failed. Attempting JSON repair pass.");
-      try {
-        const repairSystemPrompt =
-          "You are a strict JSON repair assistant. Return ONLY valid JSON with no markdown. " +
-          "Repair malformed/truncated JSON while preserving the original structure and intent.";
-        const repairUserPrompt =
-          `The following model output should be valid resume JSON but is malformed/truncated.\n` +
-          `Fix it into valid JSON only.\n\n` +
-          `Malformed output:\n${jsonText}`;
+    const cleanAchievements = (items: unknown): string[] =>
+      Array.isArray(items)
+        ? items.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
 
-        const repairMessages: AIMessage[] = [
-          { role: "system", content: repairSystemPrompt },
-          { role: "user", content: repairUserPrompt },
-        ];
+    const shouldPreferProfileAchievements = (
+      aiAchievements: string[],
+      profileAchievements: string[],
+      startDate: string,
+      endDate: string
+    ) => {
+      if (profileAchievements.length === 0) return false;
+      if (aiAchievements.length === 0) return true;
 
-        const repairedResp = await callAI({
-          provider: apiProvider as any,
-          model: selectedModel,
-          messages: repairMessages,
-          temperature: 0,
-          max_tokens: 4096,
-          tryParseJson: true,
-        });
+      const target = getBulletCountForTenure(
+        getTenureYears(startDate || "", endDate || "Present")
+      );
 
-        providerUsed = repairedResp.providerUsed;
-        modelUsed = repairedResp.modelUsed;
-        const repairedText =
-          repairedResp.json && typeof repairedResp.json !== "string"
-            ? JSON.stringify(repairedResp.json)
-            : repairedResp.text;
-
-        analysisResult = parseJsonSafely(repairedText || "");
-      } catch (repairError) {
-        console.error("Failed to parse JSON response after repair attempt:", jsonText);
-        return NextResponse.json(
-          {
-            error: "Failed to parse AI response",
-            rawResponse: jsonText,
-          },
-          { status: 500 }
-        );
+      if (aiAchievements.length < Math.max(2, Math.floor(target * 0.6))) {
+        return true;
       }
+      if (aiAchievements.length < Math.floor(profileAchievements.length * 0.5)) {
+        return true;
+      }
+      return false;
+    };
+
+    // Parse the JSON response — stop immediately on failure (no repair pass)
+    try {
+      analysisResult = JSON.parse(cleanJsonText(jsonText));
+    } catch (parseError) {
+      const diagnostics = diagnoseJsonParseFailure(jsonText, parseError);
+      const errorMessage = formatJsonParseErrorMessage(
+        diagnostics,
+        providerUsed,
+        modelUsed
+      );
+
+      console.error("AI JSON parse failed — generation stopped.", {
+        provider: providerUsed,
+        model: modelUsed,
+        diagnostics,
+      });
+
+      return NextResponse.json(
+        {
+          error: errorMessage,
+          diagnostics,
+          providerUsed,
+          modelUsed,
+          rawResponse: jsonText.slice(0, 12000),
+        },
+        { status: 422 }
+      );
     }
 
     // Return only the resume JSON (remove any analysis fields if present)
@@ -222,34 +222,51 @@ ${resumeContent}${bulletGuidance}`;
             achievements: comp.achievements || [],
           }));
 
-          // Combine and deduplicate - AI-generated experience takes priority (it's optimized for JD)
-          // SIMPLE RULE: First occurrence wins, all others with same company+dates are skipped
-          // AI-generated experience comes first, so it takes priority over profile experience
+          // AI entries first, profile second — on duplicate company+dates keep AI
+          // title/dates but fall back to profile achievements when AI bullets are thin
           const combined = [...existingExperience, ...profileExperience];
           const finalMerged: any[] = [];
-          const seenCompanyDates = new Set<string>();
+          const indexByCompanyDates = new Map<string, number>();
 
-          for (const exp of combined) {
-            // Key: company + dates (same company, same dates = duplicate, even if title differs)
-            const companyDateKey = `${exp.company || ""}|${
-              exp.startDate || ""
-            }|${exp.endDate || ""}`
+          const companyDateKey = (exp: any) =>
+            `${exp.company || ""}|${exp.startDate || ""}|${exp.endDate || ""}`
               .toLowerCase()
               .trim();
 
-            // Simple check: if we've seen this company+date combo, skip it entirely
-            // Since AI-generated experience comes first, it takes priority over profile experience
-            if (!seenCompanyDates.has(companyDateKey)) {
-              seenCompanyDates.add(companyDateKey);
+          for (const exp of combined) {
+            const key = companyDateKey(exp);
+            const existingIdx = indexByCompanyDates.get(key);
+
+            if (existingIdx === undefined) {
+              indexByCompanyDates.set(key, finalMerged.length);
               finalMerged.push(exp);
-            } else {
-              // Duplicate - skip it (AI-generated experience already in array takes priority)
+              continue;
+            }
+
+            const aiEntry = finalMerged[existingIdx];
+            const profileEntry = exp;
+            const aiAchievements = cleanAchievements(aiEntry.achievements);
+            const profileAchievements = cleanAchievements(profileEntry.achievements);
+
+            if (
+              shouldPreferProfileAchievements(
+                aiAchievements,
+                profileAchievements,
+                profileEntry.startDate || aiEntry.startDate || "",
+                profileEntry.endDate || aiEntry.endDate || "Present"
+              )
+            ) {
+              finalMerged[existingIdx] = {
+                ...aiEntry,
+                title: aiEntry.title || profileEntry.title,
+                achievements: profileAchievements,
+              };
               console.log(
-                `Merge phase: Skipping duplicate experience (AI-generated takes priority):`,
-                exp.title,
-                exp.company,
-                exp.startDate,
-                exp.endDate
+                `Merge phase: Using profile achievements for ${profileEntry.company} (AI had ${aiAchievements.length}, profile has ${profileAchievements.length})`
+              );
+            } else {
+              console.log(
+                `Merge phase: Keeping AI achievements for ${profileEntry.company} (AI ${aiAchievements.length}, profile ${profileAchievements.length})`
               );
             }
           }
