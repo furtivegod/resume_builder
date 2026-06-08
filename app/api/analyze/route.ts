@@ -396,7 +396,11 @@ ${resumeContent}${bulletGuidance}`;
         }
       }
 
-      resumeData.experience = finalExperience;
+      resumeData.experience = finalExperience.filter((exp: any) => {
+        const company = String(exp.company || "").trim();
+        const title = String(exp.title || "").trim();
+        return company.length > 0 || title.length > 0;
+      });
 
       // Sort experience from latest (most recent) to oldest first
       resumeData.experience.sort((a: any, b: any) => {
@@ -430,12 +434,15 @@ ${resumeContent}${bulletGuidance}`;
       resumeData.experience = resumeData.experience.map((exp: any) => {
         if (exp.achievements && Array.isArray(exp.achievements)) {
           const seenAchievements = new Set<string>();
-          const uniqueAchievements = exp.achievements.filter((ach: string) => {
-            const normalized = ach.trim().toLowerCase();
-            if (seenAchievements.has(normalized)) return false;
-            seenAchievements.add(normalized);
-            return true;
-          });
+          const uniqueAchievements = exp.achievements
+            .map((ach: string) => String(ach || "").trim())
+            .filter(Boolean)
+            .filter((ach: string) => {
+              const normalized = ach.toLowerCase();
+              if (seenAchievements.has(normalized)) return false;
+              seenAchievements.add(normalized);
+              return true;
+            });
           const tenureYears = getTenureYears(exp.startDate || "", exp.endDate || "Present");
           const maxBullets = getBulletCountForTenure(tenureYears);
           exp.achievements = uniqueAchievements.slice(0, maxBullets);
@@ -578,17 +585,35 @@ ${resumeContent}${bulletGuidance}`;
             `[DEDUP] Final pass complete: ${uniqueExperience.length} unique entries out of ${resume.experience.length} total`
           );
 
-          view.hasExperience = uniqueExperience.length > 0;
-          view.experience = uniqueExperience.map((exp: any) => ({
-            ...exp,
-            achievements: Array.isArray(exp.achievements)
-              ? exp.achievements.map((ach: string) => {
-                  const s = String(ach || "").trim();
-                  if (!s) return s;
-                  return s.endsWith(".") ? s : s + ".";
-                })
-              : exp.achievements,
-          }));
+          const renderableExperience = uniqueExperience.filter((exp: any) => {
+            const company = String(exp.company || "").trim();
+            const title = String(exp.title || "").trim();
+            return company.length > 0 || title.length > 0;
+          });
+
+          view.hasExperience = renderableExperience.length > 0;
+          view.experience = renderableExperience.map((exp: any) => {
+            const start = String(exp.startDate || "").trim();
+            const end = String(exp.endDate || "").trim();
+            const dateRange =
+              start && end ? `${start} – ${end}` : start || end || "";
+
+            const achievements = Array.isArray(exp.achievements)
+              ? exp.achievements
+                  .map((ach: string) => String(ach || "").trim())
+                  .filter(Boolean)
+                  .map((s: string) => (s.endsWith(".") ? s : `${s}.`))
+              : [];
+
+            return {
+              ...exp,
+              company: String(exp.company || "").trim(),
+              title: String(exp.title || "").trim(),
+              dateRange,
+              achievements,
+              hasAchievements: achievements.length > 0,
+            };
+          });
         } else {
           view.hasExperience = false;
           view.experience = [];

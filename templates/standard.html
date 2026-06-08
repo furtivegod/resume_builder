@@ -82,6 +82,8 @@
     }
     .section-summary { margin-bottom: 0.5cm; }
     .section-skills { margin-bottom: 0.5cm; }
+    .section-experience { margin-bottom: 0.5cm; }
+    .section-education { margin-bottom: 0.5cm; }
     .experience-item {
       margin-bottom: 0.5cm;
       padding-bottom: 0;
@@ -96,6 +98,8 @@
       justify-content: space-between;
       align-items: flex-start;
       margin-bottom: 1px;
+      page-break-after: avoid;
+      break-after: avoid-page;
     }
     .experience-header-left {
       flex: 1;
@@ -283,15 +287,15 @@
             <div class="company">{{company}}</div>
             <div class="job-title">{{title}}</div>
           </div>
-          <div class="date-range">{{startDate}} – {{endDate}}</div>
+          {{#dateRange}}<div class="date-range">{{dateRange}}</div>{{/dateRange}}
         </div>
-        {{#achievements}}
+        {{#hasAchievements}}
         <div class="achievements">
-          {{#.}}
+          {{#achievements}}
           <div class="achievement-item">{{.}}</div>
-          {{/.}}
+          {{/achievements}}
         </div>
-        {{/achievements}}
+        {{/hasAchievements}}
       </div>
       {{/experience}}
     </div>
