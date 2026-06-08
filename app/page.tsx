@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import Auth from "@/components/Auth";
 import ResumeForm from "@/components/ResumeForm";
-import ResultDisplay from "@/components/ResultDisplay";
+import ResultDisplay, { QuestionAnswer } from "@/components/ResultDisplay";
 
 export interface ResumeExperience {
   title: string;
@@ -69,6 +70,8 @@ interface ResumeTabState {
   lastModelUsed?: string;
   questionsText: string;
   lastJd: string;
+  coverLetter: string;
+  answers: QuestionAnswer[];
 }
 
 function createTab(
@@ -90,6 +93,8 @@ function createTab(
     lastModelUsed: undefined,
     questionsText: "",
     lastJd: "",
+    coverLetter: "",
+    answers: [],
   };
 }
 
@@ -101,6 +106,18 @@ export default function Home() {
   const [tabs, setTabs] = useState<ResumeTabState[]>([createTab(1, "openai")]);
   const [activeTabId, setActiveTabId] = useState<string>("tab-1");
   const [nextTabIndex, setNextTabIndex] = useState<number>(2);
+  const [downloadPath, setDownloadPath] = useState<string>("");
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return;
+      fetch("/api/preferences", { headers: { Authorization: `Bearer ${session.access_token}` } })
+        .then((r) => r.json())
+        .then(({ preferences }) => setDownloadPath((preferences?.default_resume as any)?.download_path || ""))
+        .catch(() => {});
+    });
+  }, [user]);
 
   const patchTab = useCallback((tabId: string, patch: Partial<ResumeTabState>) => {
     setTabs((prev) =>
@@ -178,6 +195,8 @@ export default function Home() {
                 lastProviderUsed: undefined,
                 lastModelUsed: undefined,
                 lastJd: jd ?? "",
+                coverLetter: "",
+                answers: [],
                 label: derivedLabel || tab.label,
               }
             : tab
@@ -239,8 +258,8 @@ export default function Home() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -250,348 +269,133 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                Resume Generator
-              </h1>
-              <p className="text-sm text-gray-500 mt-1">
-                AI-powered resume optimization for your dream job
+    <div className="flex h-screen flex-col overflow-hidden">
+      <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-slate-200 bg-white/90 px-5 backdrop-blur-xl">
+        <h1 className="bg-gradient-to-r from-blue-700 to-cyan-500 bg-clip-text text-xl font-semibold text-transparent" style={{ fontFamily: "var(--font-display)" }}>
+          Resume Tailor
+        </h1>
+        <div className="flex items-center gap-2">
+          <span className="hidden text-xs text-slate-500 sm:inline">{user.email}</span>
+          <Link href="/profile" className="btn-soft px-3 py-1.5 text-xs">Profile</Link>
+          <button onClick={signOut} className="btn-primary px-3 py-1.5 text-xs">Sign Out</button>
+        </div>
+      </header>
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <aside className="flex w-[13%] min-w-[160px] flex-shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white/70 backdrop-blur">
+          <div className="flex-1 overflow-y-auto p-3 pt-4">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Sessions</p>
+            <div className="space-y-1">
+              {tabs.map((tab) => (
+                <div key={tab.id} className={`flex items-center rounded-lg border transition-colors ${activeTabId === tab.id ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>
+                  <button type="button" onClick={() => setActiveTabId(tab.id)} className="min-w-0 flex-1 truncate px-2 py-1.5 text-left text-xs font-medium">
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate">{tab.label}</span>
+                      {tab.loading && <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-emerald-300" />}
+                    </span>
+                  </button>
+                  {tabs.length > 1 && (
+                    <button type="button" onClick={() => handleCloseTab(tab.id)} className={`flex-shrink-0 px-1.5 py-1.5 text-xs ${activeTabId === tab.id ? "hover:bg-blue-700" : "hover:bg-slate-100"}`} aria-label={`Close ${tab.label}`}>×</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex-shrink-0 border-t border-slate-200 p-3">
+            <button type="button" onClick={handleCreateNextResumeTab} className="btn-primary w-full py-1.5 text-xs">+ New Session</button>
+          </div>
+        </aside>
+
+        <div className="flex min-h-0 flex-1 gap-4 overflow-hidden p-4">
+          <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/70 bg-white/80 p-5 shadow-[0_20px_60px_-30px_rgba(17,24,39,0.3)] backdrop-blur-xl">
+            <p className="mb-3 flex-shrink-0 text-xs font-semibold uppercase tracking-wider text-slate-500">Generate Resume</p>
+            <div className="mb-4 flex-shrink-0">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">AI Model</p>
+              <div className="flex gap-1.5">
+                {(["openai", "anthropic", "deepseek"] as const).map((p) => {
+                  const labels = { openai: "OpenAI", anthropic: "Claude", deepseek: "Deepseek" };
+                  const sessionProvider = activeTab.lastProviderUsed ?? activeTab.currentApiProvider;
+                  const modelLocked = !!activeTab.result;
+                  const active = (modelLocked ? sessionProvider : activeTab.currentApiProvider) === p;
+                  const activeColor = { openai: "bg-emerald-600 text-white", anthropic: "bg-amber-600 text-white", deepseek: "bg-blue-600 text-white" }[p];
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      disabled={activeTab.loading || modelLocked}
+                      onClick={() => { patchTab(activeTab.id, { currentApiProvider: p }); setLastSelectedApiProvider(p); }}
+                      className={`flex-1 rounded-lg px-2 py-1.5 text-center text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${active ? activeColor : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                    >
+                      {labels[p]}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[10px] text-slate-500">
+                {activeTab.result
+                  ? "Model locked for this session. Start a new session to use a different model."
+                  : "Choose before generating — applies to resume, cover letter, and answers."}
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <Link
-                href="/profile"
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors shadow-md hover:shadow-lg"
-              >
-                Profile
-              </Link>
-              <span className="text-sm text-gray-600 hidden sm:inline">
-                {user.email}
-              </span>
-              <button
-                onClick={signOut}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm font-medium transition-colors"
-              >
-                Sign Out
-              </button>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <ResumeForm
+                onSubmit={(jd, resumeContent, template, profileData, jobRole, companyName) =>
+                  handleSubmit(activeTab.id, jd, resumeContent, template, profileData, activeTab.currentApiProvider, jobRole, companyName)
+                }
+                loading={activeTab.loading}
+              />
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className={`mb-4 rounded-xl border p-4 shadow-sm ${
-          (() => {
-            const p = activeTab?.currentApiProvider;
-            if (p === "openai") return "bg-emerald-50 border-emerald-200";
-            if (p === "deepseek") return "bg-purple-50 border-purple-200";
-            return "bg-amber-50 border-amber-200";
-          })()
-        }`}>
-          <div className="flex flex-wrap items-center gap-3">
-            {(() => {
-              const p = activeTab?.currentApiProvider;
-              let badgeClass = "bg-amber-600 text-white";
-              let badgeLabel = "CLAUDE MODE";
-              let providerName = "Anthropic Claude";
-              let desc = "Higher-cost mode is active. Switch to OpenAI when possible.";
-              if (p === "openai") {
-                badgeClass = "bg-emerald-600 text-white";
-                badgeLabel = "OPENAI MODE";
-                providerName = "OpenAI";
-                desc = "Cost-optimized mode is active.";
-              } else if (p === "deepseek") {
-                badgeClass = "bg-purple-600 text-white";
-                badgeLabel = "DEEPSEEK MODE";
-                providerName = "Deepseek";
-                desc = "Deepseek mode is active.";
-              }
-
-              return (
-                <>
-                  <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold tracking-wide ${badgeClass}`}>
-                    {badgeLabel}
-                  </span>
-                  <p className="text-sm font-medium text-gray-800">
-                    Current tab provider: {providerName}
-                  </p>
-                  <p className="text-sm text-gray-700">{desc}</p>
-                </>
-              );
-            })()}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 mb-6">
-          <div className="flex flex-wrap items-center gap-2">
-            {tabs.map((tab) => (
-              <div
-                key={tab.id}
-                className={`inline-flex items-center rounded-lg border transition-colors ${
-                  activeTabId === tab.id
-                    ? "bg-indigo-600 text-white border-indigo-600"
-                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                }`}
-                title={tab.label}
-              >
-                <button
-                  type="button"
-                  onClick={() => setActiveTabId(tab.id)}
-                  className="px-4 py-2 text-sm font-medium"
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <span className="max-w-[190px] truncate">{tab.label}</span>
-                    {tab.loading && (
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    )}
-                  </span>
-                </button>
-                {tabs.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => handleCloseTab(tab.id)}
-                    className={`px-2 py-2 text-sm border-l ${
-                      activeTabId === tab.id
-                        ? "border-indigo-400 hover:bg-indigo-700"
-                        : "border-gray-300 hover:bg-gray-100"
-                    }`}
-                    aria-label={`Close ${tab.label}`}
-                    title={`Close ${tab.label}`}
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            ))}
-            <button
-              type="button"
-              onClick={handleCreateNextResumeTab}
-              className="ml-auto px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium transition-colors"
-            >
-              Next Resume
-            </button>
-          </div>
-        </div>
-
-        {tabs.map((tab) => (
-          <div key={tab.id} className={activeTabId === tab.id ? "block" : "hidden"}>
-            <div className="grid lg:grid-cols-2 gap-8">
-              <div className="bg-white rounded-xl shadow-xl p-6 lg:p-8 border border-gray-100">
-                <div className="mb-6">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                        Generate Your Resume
-                      </h2>
-                      <p className="text-gray-600">
-                        Enter the job description and your resume will be optimized
-                        automatically
-                      </p>
-                    </div>
-                    <div className="w-full sm:w-64">
-                      <p className="block text-sm font-medium text-gray-700 mb-2">
-                        AI Model
-                      </p>
-                      <div className="inline-flex w-full rounded-lg border border-gray-300 bg-white p-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            patchTab(tab.id, { currentApiProvider: "openai" });
-                            setLastSelectedApiProvider("openai");
-                          }}
-                          className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                            tab.currentApiProvider === "openai"
-                              ? "bg-emerald-600 text-white"
-                              : "text-gray-700 hover:bg-gray-100"
-                          }`}
-                          aria-pressed={tab.currentApiProvider === "openai"}
-                        >
-                          OpenAI
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            patchTab(tab.id, { currentApiProvider: "anthropic" });
-                            setLastSelectedApiProvider("anthropic");
-                          }}
-                          className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                            tab.currentApiProvider === "anthropic"
-                              ? "bg-amber-600 text-white"
-                              : "text-gray-700 hover:bg-gray-100"
-                          }`}
-                          aria-pressed={tab.currentApiProvider === "anthropic"}
-                        >
-                          Claude
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            patchTab(tab.id, { currentApiProvider: "deepseek" });
-                            setLastSelectedApiProvider("deepseek");
-                          }}
-                          className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                            tab.currentApiProvider === "deepseek"
-                              ? "bg-purple-600 text-white"
-                              : "text-gray-700 hover:bg-gray-100"
-                          }`}
-                          aria-pressed={tab.currentApiProvider === "deepseek"}
-                        >
-                          Deepseek
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/70 bg-white/80 p-5 shadow-[0_20px_60px_-30px_rgba(17,24,39,0.3)] backdrop-blur-xl">
+            <p className="mb-3 flex-shrink-0 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              {activeTab.currentJobRole && activeTab.currentCompanyName
+                ? `${activeTab.currentJobRole} — ${activeTab.currentCompanyName}`
+                : "Your Resume"}
+            </p>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              {activeTab.error && (
+                <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{activeTab.error}</div>
+              )}
+              {activeTab.loading && (
+                <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-3">
+                  <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600" />
+                  <p className="text-sm text-slate-600">Generating…</p>
                 </div>
-                <ResumeForm
-                  onSubmit={(
-                    jd,
-                    resumeContent,
-                    template,
-                    profileData,
-                    jobRole,
-                    companyName
-                  ) =>
-                    handleSubmit(
-                      tab.id,
-                      jd,
-                      resumeContent,
-                      template,
-                      profileData,
-                      tab.currentApiProvider,
-                      jobRole,
-                      companyName
-                    )
-                  }
-                  loading={tab.loading}
+              )}
+              {activeTab.result && !activeTab.loading && (
+                <ResultDisplay
+                  key={activeTab.id}
+                  result={activeTab.result}
+                  pdfBase64={activeTab.pdfBase64}
+                  pdfError={activeTab.pdfError}
+                  sessionApiProvider={activeTab.lastProviderUsed ?? activeTab.currentApiProvider}
+                  jobRole={activeTab.currentJobRole}
+                  companyName={activeTab.currentCompanyName}
+                  providerUsed={activeTab.lastProviderUsed}
+                  modelUsed={activeTab.lastModelUsed}
+                  lastJd={activeTab.lastJd}
+                  downloadPath={downloadPath}
+                  questionsText={activeTab.questionsText}
+                  setQuestionsText={(value) => patchTab(activeTab.id, { questionsText: value })}
+                  coverLetter={activeTab.coverLetter}
+                  setCoverLetter={(value) => patchTab(activeTab.id, { coverLetter: value })}
+                  answers={activeTab.answers}
+                  setAnswers={(value) => patchTab(activeTab.id, { answers: value })}
                 />
-              </div>
-
-              <div className="bg-white rounded-xl shadow-xl p-6 lg:p-8 border border-gray-100">
-                <div className="mb-6">
-                  <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                    Your Resume
-                  </h2>
-                  <p className="text-gray-600">
-                    Download your optimized resume once it&apos;s generated
-                  </p>
+              )}
+              {!activeTab.result && !activeTab.loading && !activeTab.error && (
+                <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-2 text-center">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
+                    <svg className="h-7 w-7 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm text-slate-500">Paste a job description and click Generate.</p>
                 </div>
-
-                {tab.error && (
-                  <div className="mb-4 p-4 bg-red-50 border-2 border-red-200 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <svg
-                        className="w-5 h-5 text-red-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                      <p className="text-red-800 font-medium">{tab.error}</p>
-                    </div>
-                  </div>
-                )}
-
-                {tab.loading && (
-                  <div className="flex flex-col items-center justify-center min-h-[400px]">
-                    <div className="animate-spin rounded-full h-16 w-16 border-4 border-indigo-200 border-t-indigo-600 mb-4"></div>
-                    <p className="text-gray-600 font-medium">
-                      Generating your optimized resume...
-                    </p>
-                    <p className="text-sm text-gray-500 mt-2">
-                      This may take a few moments
-                    </p>
-                  </div>
-                )}
-
-                {tab.result && !tab.loading && (
-                  <ResultDisplay
-                    result={tab.result}
-                    pdfBase64={tab.pdfBase64}
-                    pdfError={tab.pdfError}
-                    apiProvider={tab.currentApiProvider}
-                    jobRole={tab.currentJobRole}
-                    companyName={tab.currentCompanyName}
-                    providerUsed={tab.lastProviderUsed}
-                    modelUsed={tab.lastModelUsed}
-                    questionsText={tab.questionsText}
-                    setQuestionsText={(value) =>
-                      patchTab(tab.id, { questionsText: value })
-                    }
-                    lastJd={tab.lastJd}
-                  />
-                )}
-
-                {!tab.result && !tab.loading && !tab.error && (
-                  <div className="flex flex-col w-full max-w-2xl space-y-6">
-                    <div className="flex flex-col items-center justify-center min-h-[280px] text-center">
-                      <div className="w-24 h-24 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mb-6">
-                        <svg
-                          className="w-12 h-12 text-indigo-600"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                          />
-                        </svg>
-                      </div>
-                      <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                        Ready to Generate
-                      </h3>
-                      <p className="text-gray-600 max-w-sm">
-                        Fill out the form on the left and click &quot;Generate Resume&quot;
-                        to create your optimized resume
-                      </p>
-                    </div>
-                    <div className="bg-white p-6 rounded-xl border-2 border-gray-200 shadow-lg w-full">
-                      <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                        Questions from job
-                      </h3>
-                      <p className="text-sm text-gray-500 mb-3">
-                        Enter interview questions (one per line). Generate a resume
-                        first, then click &quot;Get answers&quot; to see answers based on
-                        your resume.
-                      </p>
-                      <textarea
-                        value={tab.questionsText}
-                        onChange={(e) =>
-                          patchTab(tab.id, { questionsText: e.target.value })
-                        }
-                        placeholder={
-                          "e.g. Tell me about a time you led a project.\nWhat are your strengths?\nWhy do you want to join us?"
-                        }
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y min-h-[120px]"
-                        rows={5}
-                      />
-                      <button
-                        type="button"
-                        disabled
-                        className="mt-3 w-full px-4 py-3 bg-gray-300 text-gray-500 rounded-lg font-medium cursor-not-allowed"
-                      >
-                        Get answers (generate resume first)
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           </div>
-        ))}
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
+import os from "os";
 import path from "path";
 
 export async function POST(request: NextRequest) {
   try {
-    const { pdfBase64, jobRole, companyName, fileName, jobDescription } =
+    const { pdfBase64, jobRole, companyName, fileName, jobDescription, downloadPath } =
       await request.json();
 
     if (!pdfBase64 || typeof pdfBase64 !== "string") {
@@ -40,7 +41,15 @@ export async function POST(request: NextRequest) {
         ? fileName.replace(/[/\\:*?"<>|]/g, "_")
         : "resume.pdf";
 
-    const resumeDir = path.join(process.cwd(), "resume", folderName);
+    let resumeDir: string;
+    if (downloadPath && typeof downloadPath === "string" && downloadPath.trim()) {
+      const customBase = path.normalize(downloadPath.trim());
+      resumeDir = path.isAbsolute(customBase)
+        ? path.join(customBase, folderName)
+        : path.join(process.cwd(), customBase, folderName);
+    } else {
+      resumeDir = path.join(os.homedir(), "Downloads", "resume", folderName);
+    }
     await fs.mkdir(resumeDir, { recursive: true });
 
     let base64Data = pdfBase64.trim();

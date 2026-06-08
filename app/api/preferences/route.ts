@@ -52,6 +52,8 @@ export async function GET(request: NextRequest) {
         company_1: null,
         company_2: null,
         company_3: null,
+        company_4: null,
+        company_5: null,
       },
     });
   } catch (error) {
@@ -85,7 +87,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { default_resume, company_1, company_2, company_3 } = body;
+    const { default_resume, company_1, company_2, company_3, company_4, company_5 } = body;
 
     // Check if preferences already exist
     const { data: existing } = await supabase
@@ -103,6 +105,8 @@ export async function POST(request: NextRequest) {
           company_1: company_1 || null,
           company_2: company_2 || null,
           company_3: company_3 || null,
+          company_4: company_4 || null,
+          company_5: company_5 || null,
           updated_at: new Date().toISOString(),
         })
         .eq("user_id", user.id)
@@ -128,6 +132,8 @@ export async function POST(request: NextRequest) {
           company_1: company_1 || null,
           company_2: company_2 || null,
           company_3: company_3 || null,
+          company_4: company_4 || null,
+          company_5: company_5 || null,
         })
         .select()
         .single();

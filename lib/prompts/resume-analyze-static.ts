@@ -155,6 +155,20 @@ WORK HISTORY RULES (GLOBAL) - CRITICAL UPDATE REQUIREMENTS
 - Stakeholder interaction must be explicit
 - Each Experience bullet must take at least 1 METRICS.
 
+----------------------------------------
+EXPERIENCE BULLET COUNTS (MANDATORY — EXACT)
+----------------------------------------
+- Order experience from most recent to oldest (maximum 5 roles)
+- Each role MUST contain EXACTLY this many achievement bullets:
+  - Role 1 (most recent): exactly 9 bullets
+  - Role 2: exactly 7 bullets
+  - Role 3: exactly 6 bullets
+  - Role 4: exactly 5 bullets
+  - Role 5 (oldest): exactly 5 bullets
+- If the candidate has fewer than 5 roles, apply this pattern only to the roles that exist
+- NEVER give an older role more bullets than a newer role
+- Do NOT return partial counts like 6, 7, 6, 4, 4 — the counts must match the pattern above
+
 - Avoid filler words like this: very, highly, really, various, multiple, numerous, significant, some, many, things, stuff
 - Prefer precise verbs: re-architected, instrumented, standardized, orchestrated, stabilized, automated
 - CRITICAL: Do NOT duplicate experience entries. Each job (title + company + startDate) must appear only ONCE in the experience array
@@ -211,7 +225,7 @@ Hard Skills (MANDATORY)
   - Otherwise omitted
 - Industry category:
   - Always included
-  - Must reflect healthcare for first and second company.
+  - Must reflect healthcare for companies in the candidate's profile work history (up to five).
   - refletct fintech or eCommerce if JD includes fintech or eCommerce industry.
 - Hard skills must:
   - Appear in experience bullets

@@ -5,6 +5,11 @@ import fs from "fs/promises";
 import path from "path";
 import Mustache from "mustache";
 import { RESUME_ANALYZE_STATIC_PROMPT } from "@/lib/prompts/resume-analyze-static";
+import {
+  expandExperienceBulletsWithAI,
+  experienceNeedsBulletExpansion,
+  normalizeExperienceBullets,
+} from "@/lib/resume-experience";
 
 // centralized provider used below
 
@@ -68,7 +73,7 @@ ${resumeContent}`;
         : process.env.ANTHROPIC_MODEL;
 
     // Deepseek responses can be cut for long resumes; allow a larger completion budget.
-    const generationMaxTokens = apiProvider === "deepseek" ? 8192 : 4096;
+    const generationMaxTokens = 8192;
 
     const parseJsonSafely = (input: string) => {
       let cleanedJsonText = String(input || "").trim();
@@ -186,12 +191,16 @@ ${resumeContent}`;
       if (
         profileData.company_1 ||
         profileData.company_2 ||
-        profileData.company_3
+        profileData.company_3 ||
+        profileData.company_4 ||
+        profileData.company_5
       ) {
         const profileCompanies = [
           profileData.company_1,
           profileData.company_2,
           profileData.company_3,
+          profileData.company_4,
+          profileData.company_5,
         ].filter(Boolean);
 
         if (profileCompanies.length > 0) {
@@ -410,25 +419,27 @@ ${resumeContent}`;
         return bStartDate.getTime() - aStartDate.getTime(); // Descending order
       });
 
-      // Limit to 3 most recent positions; cap bullets: 1st role 9, 2nd 7, 3rd 5
-      if (resumeData.experience.length > 3) {
-        resumeData.experience = resumeData.experience.slice(0, 3);
+      // Limit to 5 most recent positions; enforce bullets: 9, 7, 6, 5, 5
+      if (resumeData.experience.length > 5) {
+        resumeData.experience = resumeData.experience.slice(0, 5);
       }
-      const bulletLimits = [9, 7, 5]; // 1st experience 9 bullets, 2nd 7, 3rd 5
-      resumeData.experience = resumeData.experience.map((exp: any, index: number) => {
-        if (exp.achievements && Array.isArray(exp.achievements)) {
-          const seenAchievements = new Set<string>();
-          const uniqueAchievements = exp.achievements.filter((ach: string) => {
-            const normalized = ach.trim().toLowerCase();
-            if (seenAchievements.has(normalized)) return false;
-            seenAchievements.add(normalized);
-            return true;
-          });
-          const maxBullets = bulletLimits[index] ?? 5;
-          exp.achievements = uniqueAchievements.slice(0, maxBullets);
-        }
-        return exp;
-      });
+      resumeData.experience = normalizeExperienceBullets(
+        resumeData.experience,
+        profileData
+      );
+
+      if (experienceNeedsBulletExpansion(resumeData.experience)) {
+        resumeData.experience = await expandExperienceBulletsWithAI(
+          resumeData.experience,
+          jd,
+          providerUsed,
+          modelUsed || selectedModel
+        );
+        resumeData.experience = normalizeExperienceBullets(
+          resumeData.experience,
+          profileData
+        );
+      }
     }
 
     // Template is provided in the request; default to 'standard' if missing

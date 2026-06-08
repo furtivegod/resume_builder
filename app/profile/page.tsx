@@ -6,6 +6,11 @@ import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/lib/supabase";
 import { UpdatedResume, ResumeExperience } from "@/app/page";
 
+const COMPANY_COUNT = 5;
+
+const emptyCompanies = (): (ResumeExperience | null)[] =>
+  Array.from({ length: COMPANY_COUNT }, () => null);
+
 export default function ProfilePage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -23,9 +28,9 @@ export default function ProfilePage() {
     certifications: [],
     projects: [],
   });
-  const [company1, setCompany1] = useState<ResumeExperience | null>(null);
-  const [company2, setCompany2] = useState<ResumeExperience | null>(null);
-  const [company3, setCompany3] = useState<ResumeExperience | null>(null);
+  const [companies, setCompanies] =
+    useState<(ResumeExperience | null)[]>(emptyCompanies);
+  const [downloadPath, setDownloadPath] = useState<string>("");
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -52,9 +57,14 @@ export default function ProfilePage() {
         if (preferences.default_resume) {
           setDefaultResume(preferences.default_resume);
         }
-        setCompany1(preferences.company_1 || null);
-        setCompany2(preferences.company_2 || null);
-        setCompany3(preferences.company_3 || null);
+        setCompanies([
+          preferences.company_1 || null,
+          preferences.company_2 || null,
+          preferences.company_3 || null,
+          preferences.company_4 || null,
+          preferences.company_5 || null,
+        ]);
+        setDownloadPath((preferences.default_resume as any)?.download_path || "");
       }
     } catch (error) {
       console.error("Error loading preferences:", error);
@@ -78,10 +88,12 @@ export default function ProfilePage() {
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          default_resume: defaultResume,
-          company_1: company1,
-          company_2: company2,
-          company_3: company3,
+          default_resume: { ...defaultResume, download_path: downloadPath },
+          company_1: companies[0],
+          company_2: companies[1],
+          company_3: companies[2],
+          company_4: companies[3],
+          company_5: companies[4],
         }),
       });
 
@@ -167,14 +179,13 @@ export default function ProfilePage() {
   };
 
   const updateCompany = (
-    num: 1 | 2 | 3,
+    index: number,
     field: string,
     value: string | string[]
   ) => {
-    const setter = num === 1 ? setCompany1 : num === 2 ? setCompany2 : setCompany3;
-    const company = num === 1 ? company1 : num === 2 ? company2 : company3;
-    setter({
-      ...(company || {
+    const updated = [...companies];
+    updated[index] = {
+      ...(updated[index] || {
         title: "",
         company: "",
         startDate: "",
@@ -183,13 +194,20 @@ export default function ProfilePage() {
         achievements: [],
       }),
       [field]: value,
-    });
+    };
+    setCompanies(updated);
+  };
+
+  const clearCompany = (index: number) => {
+    const updated = [...companies];
+    updated[index] = null;
+    setCompanies(updated);
   };
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -200,14 +218,14 @@ export default function ProfilePage() {
   }
 
   return (
-    <main className="min-h-screen p-8 bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-xl">
-          <div className="border-b px-6 py-4 flex justify-between items-center">
-            <h2 className="text-2xl font-bold text-gray-800">Profile Settings</h2>
+    <main className="min-h-screen px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-4xl">
+        <div className="glass-panel overflow-hidden rounded-3xl">
+          <div className="flex items-center justify-between border-b border-slate-200/80 px-6 py-5">
+            <h2 className="text-2xl font-semibold text-slate-900" style={{ fontFamily: "var(--font-display)" }}>Profile Settings</h2>
             <button
               onClick={() => router.push("/")}
-              className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm font-medium"
+              className="btn-soft"
             >
               Back to Home
             </button>
@@ -215,11 +233,27 @@ export default function ProfilePage() {
 
           <div className="p-6 space-y-6">
             {loading ? (
-              <div className="flex justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                <div className="flex justify-center py-8">
+                <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
               </div>
             ) : (
               <>
+                {/* Download Path */}
+                <section className="border-b pb-6">
+                  <h3 className="text-xl font-semibold mb-4 text-gray-700">PDF Save Location</h3>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Download Path</label>
+                    <input
+                      type="text"
+                      value={downloadPath}
+                      onChange={(e) => setDownloadPath(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg"
+                      placeholder="e.g. C:\Users\you\Documents\Resumes (empty = Downloads/resume)"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Absolute path where PDFs are saved. Leave empty to use your OS Downloads/resume folder.</p>
+                  </div>
+                </section>
+
                 {/* Default Resume Info */}
                 <section className="border-b pb-6">
                   <h3 className="text-xl font-semibold mb-4 text-gray-700">
@@ -459,10 +493,9 @@ export default function ProfilePage() {
                 </section>
 
                 {/* Company Details */}
-                {[1, 2, 3].map((num) => {
-                  const company = num === 1 ? company1 : num === 2 ? company2 : company3;
-                  const setCompany =
-                    num === 1 ? setCompany1 : num === 2 ? setCompany2 : setCompany3;
+                {Array.from({ length: COMPANY_COUNT }, (_, index) => {
+                  const num = index + 1;
+                  const company = companies[index];
                   return (
                     <section key={num} className="border-b pb-6">
                       <h3 className="text-xl font-semibold mb-4 text-gray-700">
@@ -472,25 +505,25 @@ export default function ProfilePage() {
                         <input
                           placeholder="Job Title"
                           value={company?.title || ""}
-                          onChange={(e) => updateCompany(num as 1 | 2 | 3, "title", e.target.value)}
+                          onChange={(e) => updateCompany(index, "title", e.target.value)}
                           className="px-3 py-2 border rounded"
                         />
                         <input
                           placeholder="Company Name"
                           value={company?.company || ""}
-                          onChange={(e) => updateCompany(num as 1 | 2 | 3, "company", e.target.value)}
+                          onChange={(e) => updateCompany(index, "company", e.target.value)}
                           className="px-3 py-2 border rounded"
                         />
                         <input
                           placeholder="Start Date (MM/YYYY)"
                           value={company?.startDate || ""}
-                          onChange={(e) => updateCompany(num as 1 | 2 | 3, "startDate", e.target.value)}
+                          onChange={(e) => updateCompany(index, "startDate", e.target.value)}
                           className="px-3 py-2 border rounded"
                         />
                         <input
                           placeholder="End Date (MM/YYYY or Present)"
                           value={company?.endDate || ""}
-                          onChange={(e) => updateCompany(num as 1 | 2 | 3, "endDate", e.target.value)}
+                          onChange={(e) => updateCompany(index, "endDate", e.target.value)}
                           className="px-3 py-2 border rounded"
                         />
                       </div>
@@ -500,7 +533,7 @@ export default function ProfilePage() {
                         </label>
                         <textarea
                           value={company?.description || ""}
-                          onChange={(e) => updateCompany(num as 1 | 2 | 3, "description", e.target.value)}
+                          onChange={(e) => updateCompany(index, "description", e.target.value)}
                           rows={3}
                           className="w-full px-3 py-2 border rounded-lg"
                           placeholder="Enter a brief description about the company and your role"
@@ -514,7 +547,7 @@ export default function ProfilePage() {
                           value={(company?.achievements || []).join("\n")}
                           onChange={(e) =>
                             updateCompany(
-                              num as 1 | 2 | 3,
+                              index,
                               "achievements",
                               e.target.value.split("\n").filter((l) => l.trim())
                             )
@@ -525,7 +558,7 @@ export default function ProfilePage() {
                         />
                       </div>
                       <button
-                        onClick={() => setCompany(null)}
+                        onClick={() => clearCompany(index)}
                         className="mt-2 text-red-600 text-sm"
                       >
                         Clear Company {num}
@@ -537,17 +570,17 @@ export default function ProfilePage() {
             )}
           </div>
 
-          <div className="border-t px-6 py-4 flex justify-end gap-3">
+          <div className="flex justify-end gap-3 border-t border-slate-200/80 px-6 py-4">
             <button
               onClick={() => router.push("/")}
-              className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+              className="btn-soft"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              className="btn-primary px-4 py-2.5"
             >
               {saving ? "Saving..." : "Save"}
             </button>

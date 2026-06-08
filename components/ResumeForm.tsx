@@ -56,13 +56,17 @@ export default function ResumeForm({
           preferences.default_resume ||
           preferences.company_1 ||
           preferences.company_2 ||
-          preferences.company_3
+          preferences.company_3 ||
+          preferences.company_4 ||
+          preferences.company_5
         ) {
           const defaultResume: UpdatedResume = preferences.default_resume || {};
           const companies: (ResumeExperience | null)[] = [
             preferences.company_1,
             preferences.company_2,
             preferences.company_3,
+            preferences.company_4,
+            preferences.company_5,
           ].filter(Boolean);
 
           // Build a text representation of the resume
@@ -161,80 +165,37 @@ export default function ResumeForm({
     }
   };
 
+  const hasResume = !loadingPrefs && resumeContent.trim().length > 0;
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="grid grid-cols-2 gap-4">
+    <form onSubmit={handleSubmit} className="flex h-full flex-col gap-4">
+      <div className={`flex-shrink-0 rounded-lg px-3 py-2 text-xs ${
+        loadingPrefs ? "bg-slate-100 text-slate-500" :
+        hasResume ? "bg-emerald-50 text-emerald-700" :
+        "bg-amber-50 text-amber-700"
+      }`}>
+        {loadingPrefs ? "Loading your profile…" : hasResume ? "Profile resume loaded ✓" : "No profile resume — go to Profile first."}
+      </div>
+
+      <div className="flex-shrink-0 grid grid-cols-2 gap-3">
         <div>
-          <label
-            htmlFor="jobRole"
-            className="block text-sm font-medium text-gray-700 mb-2"
-          >
-            Job Role
-          </label>
-          <input
-            id="jobRole"
-            type="text"
-            value={jobRole}
-            onChange={(e) => setJobRole(e.target.value)}
-            placeholder="e.g. Senior Engineer"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          />
+          <label htmlFor="jobRole" className="mb-1 block text-xs font-medium text-slate-600">Job Title</label>
+          <input id="jobRole" type="text" value={jobRole} onChange={(e) => setJobRole(e.target.value)} placeholder="e.g. Senior Engineer" className="input-shell" />
         </div>
         <div>
-          <label
-            htmlFor="companyName"
-            className="block text-sm font-medium text-gray-700 mb-2"
-          >
-            Company Name
-          </label>
-          <input
-            id="companyName"
-            type="text"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-            placeholder="e.g. Freshworks"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          />
+          <label htmlFor="companyName" className="mb-1 block text-xs font-medium text-slate-600">Company</label>
+          <input id="companyName" type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="e.g. Acme Corp" className="input-shell" />
         </div>
       </div>
 
-      <div>
-        <label
-          htmlFor="jd"
-          className="block text-sm font-medium text-gray-700 mb-2"
-        >
-          Job Description (JD)
-        </label>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <label htmlFor="jd" className="mb-1 flex-shrink-0 block text-xs font-medium text-slate-600">Job Description</label>
         <textarea
           id="jd"
           value={jd}
           onChange={(e) => setJd(e.target.value)}
-          placeholder="Paste the job description here..."
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
-          rows={10}
-          required
-        />
-      </div>
-
-      <div>
-        <label
-          htmlFor="resumeContent"
-          className="block text-sm font-medium text-gray-700 mb-2"
-        >
-          Resume Content{" "}
-          {loadingPrefs && (
-            <span className="text-xs text-gray-500">
-              (Loading saved preferences...)
-            </span>
-          )}
-        </label>
-        <textarea
-          id="resumeContent"
-          value={resumeContent}
-          onChange={(e) => setResumeContent(e.target.value)}
-          placeholder="Paste your existing resume content here... (or it will be loaded from your saved preferences)"
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
-          rows={10}
+          placeholder="Paste the full job description here…"
+          className="input-shell flex-1 resize-none"
           required
         />
       </div>
@@ -242,9 +203,9 @@ export default function ResumeForm({
       <button
         type="submit"
         disabled={loading || !jd.trim() || !resumeContent.trim()}
-        className="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="btn-primary flex-shrink-0 w-full"
       >
-        {loading ? "Generating..." : "Generate Resume"}
+        {loading ? "Generating…" : "Generate Resume"}
       </button>
     </form>
   );
