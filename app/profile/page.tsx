@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/lib/supabase";
 import { UpdatedResume, ResumeExperience } from "@/app/page";
+import {
+  DEFAULT_RESUME_TEMPLATE,
+  RESUME_TEMPLATES,
+  type ResumeTemplateId,
+} from "@/lib/resume-templates";
 
 const COMPANY_COUNT = 5;
 
@@ -31,6 +36,8 @@ export default function ProfilePage() {
   const [companies, setCompanies] =
     useState<(ResumeExperience | null)[]>(emptyCompanies);
   const [downloadPath, setDownloadPath] = useState<string>("");
+  const [resumeTemplate, setResumeTemplate] =
+    useState<ResumeTemplateId>(DEFAULT_RESUME_TEMPLATE);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -64,7 +71,12 @@ export default function ProfilePage() {
           preferences.company_4 || null,
           preferences.company_5 || null,
         ]);
-        setDownloadPath((preferences.default_resume as any)?.download_path || "");
+        const savedResume = preferences.default_resume as Record<string, unknown> | undefined;
+        setDownloadPath((savedResume?.download_path as string) || "");
+        const savedTemplate = savedResume?.resume_template as string | undefined;
+        setResumeTemplate(
+          savedTemplate === "ledger" ? "ledger" : DEFAULT_RESUME_TEMPLATE
+        );
       }
     } catch (error) {
       console.error("Error loading preferences:", error);
@@ -88,7 +100,11 @@ export default function ProfilePage() {
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          default_resume: { ...defaultResume, download_path: downloadPath },
+          default_resume: {
+            ...defaultResume,
+            download_path: downloadPath,
+            resume_template: resumeTemplate,
+          },
           company_1: companies[0],
           company_2: companies[1],
           company_3: companies[2],
@@ -238,19 +254,41 @@ export default function ProfilePage() {
               </div>
             ) : (
               <>
-                {/* Download Path */}
+                {/* Resume output */}
                 <section className="border-b pb-6">
-                  <h3 className="text-xl font-semibold mb-4 text-gray-700">PDF Save Location</h3>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Download Path</label>
-                    <input
-                      type="text"
-                      value={downloadPath}
-                      onChange={(e) => setDownloadPath(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg"
-                      placeholder="e.g. C:\Users\you\Documents\Resumes (empty = Downloads/resume)"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">Absolute path where PDFs are saved. Leave empty to use your OS Downloads/resume folder.</p>
+                  <h3 className="text-xl font-semibold mb-4 text-gray-700">Resume Output</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">PDF Template</label>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {RESUME_TEMPLATES.map((tpl) => (
+                          <button
+                            key={tpl.id}
+                            type="button"
+                            onClick={() => setResumeTemplate(tpl.id)}
+                            className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                              resumeTemplate === tpl.id
+                                ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600"
+                                : "border-slate-200 bg-white hover:border-slate-300"
+                            }`}
+                          >
+                            <span className="block text-sm font-semibold text-slate-900">{tpl.label}</span>
+                            <span className="mt-1 block text-xs text-slate-500">{tpl.description}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Download Path</label>
+                      <input
+                        type="text"
+                        value={downloadPath}
+                        onChange={(e) => setDownloadPath(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg"
+                        placeholder="e.g. C:\Users\you\Documents\Resumes (empty = Downloads/resume)"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Absolute path where PDFs are saved. Leave empty to use your OS Downloads/resume folder.</p>
+                    </div>
                   </div>
                 </section>
 

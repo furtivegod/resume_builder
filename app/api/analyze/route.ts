@@ -10,6 +10,10 @@ import {
   getBulletCountForTenure,
   getTenureYears,
 } from "@/lib/resume-bullets";
+import {
+  DEFAULT_RESUME_TEMPLATE,
+  isValidResumeTemplate,
+} from "@/lib/resume-templates";
 
 // centralized provider used below
 
@@ -452,7 +456,9 @@ ${resumeContent}${bulletGuidance}`;
     }
 
     // Template is provided in the request; default to 'standard' if missing
-    const template = requestedTemplate || "standard";
+    const template = isValidResumeTemplate(requestedTemplate || "")
+      ? requestedTemplate
+      : DEFAULT_RESUME_TEMPLATE;
 
     // Generate a PDF from the resume JSON using the chosen template with PDFShift
     // This function is wrapped in error handling to prevent PDF failures from breaking the entire request

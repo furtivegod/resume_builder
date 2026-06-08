@@ -3,6 +3,11 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { UpdatedResume, ResumeExperience } from "@/app/page";
+import {
+  DEFAULT_RESUME_TEMPLATE,
+  RESUME_TEMPLATES,
+  type ResumeTemplateId,
+} from "@/lib/resume-templates";
 
 interface ResumeFormProps {
   onSubmit: (
@@ -26,6 +31,8 @@ export default function ResumeForm({
   const [resumeContent, setResumeContent] = useState("");
   const [loadingPrefs, setLoadingPrefs] = useState(true);
   const [profileData, setProfileData] = useState<any>(null);
+  const [resumeTemplate, setResumeTemplate] =
+    useState<ResumeTemplateId>(DEFAULT_RESUME_TEMPLATE);
 
   useEffect(() => {
     loadPreferences();
@@ -49,7 +56,10 @@ export default function ResumeForm({
 
       if (response.ok) {
         const { preferences } = await response.json();
-        setProfileData(preferences); // Store profile data
+        setProfileData(preferences);
+        const savedTemplate = (preferences.default_resume as Record<string, unknown> | undefined)
+          ?.resume_template;
+        setResumeTemplate(savedTemplate === "ledger" ? "ledger" : DEFAULT_RESUME_TEMPLATE);
 
         // Build resume content from stored preferences
         if (
@@ -157,7 +167,7 @@ export default function ResumeForm({
       onSubmit(
         jd,
         resumeContent,
-        "standard",
+        resumeTemplate,
         profileData,
         jobRole.trim() || undefined,
         companyName.trim() || undefined
@@ -166,6 +176,8 @@ export default function ResumeForm({
   };
 
   const hasResume = !loadingPrefs && resumeContent.trim().length > 0;
+  const templateLabel =
+    RESUME_TEMPLATES.find((t) => t.id === resumeTemplate)?.label ?? "Standard";
 
   return (
     <form onSubmit={handleSubmit} className="flex h-full flex-col gap-4">
@@ -174,7 +186,11 @@ export default function ResumeForm({
         hasResume ? "bg-emerald-50 text-emerald-700" :
         "bg-amber-50 text-amber-700"
       }`}>
-        {loadingPrefs ? "Loading your profile…" : hasResume ? "Profile resume loaded ✓" : "No profile resume — go to Profile first."}
+        {loadingPrefs
+          ? "Loading your profile…"
+          : hasResume
+          ? `Profile loaded ✓ · ${templateLabel} template`
+          : "No profile resume — go to Profile first."}
       </div>
 
       <div className="flex-shrink-0 grid grid-cols-2 gap-3">
