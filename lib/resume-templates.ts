@@ -22,6 +22,6 @@ export function isValidResumeTemplate(id: string): id is ResumeTemplateId {
 /** Resolve saved template; migrates retired "ledger" picks to "folio". */
 export function resolveResumeTemplate(saved: string | undefined): ResumeTemplateId {
   if (saved === "folio" || saved === "ledger") return "folio";
-  if (isValidResumeTemplate(saved || "")) return saved;
+  if (saved && isValidResumeTemplate(saved)) return saved;
   return DEFAULT_RESUME_TEMPLATE;
 }
