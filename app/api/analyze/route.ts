@@ -6,10 +6,10 @@ import path from "path";
 import Mustache from "mustache";
 import { RESUME_ANALYZE_STATIC_PROMPT } from "@/lib/prompts/resume-analyze-static";
 import {
-  expandExperienceBulletsWithAI,
-  experienceNeedsBulletExpansion,
-  normalizeExperienceBullets,
-} from "@/lib/resume-experience";
+  buildBulletGuidanceFromProfile,
+  getBulletCountForTenure,
+  getTenureYears,
+} from "@/lib/resume-bullets";
 
 // centralized provider used below
 
@@ -54,11 +54,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const bulletGuidance = profileData
+      ? buildBulletGuidanceFromProfile(profileData)
+      : "";
+
     const userPrompt = `Job Description:
 ${jd}
 
 Existing Resume Content (USE AS REFERENCE ONLY - DO NOT COPY VERBATIM):
-${resumeContent}`;
+${resumeContent}${bulletGuidance}`;
 
     // Handle API provider selection
     let jsonText: string;
@@ -73,7 +77,7 @@ ${resumeContent}`;
         : process.env.ANTHROPIC_MODEL;
 
     // Deepseek responses can be cut for long resumes; allow a larger completion budget.
-    const generationMaxTokens = 8192;
+    const generationMaxTokens = apiProvider === "deepseek" ? 8192 : 4096;
 
     const parseJsonSafely = (input: string) => {
       let cleanedJsonText = String(input || "").trim();
@@ -419,27 +423,25 @@ ${resumeContent}`;
         return bStartDate.getTime() - aStartDate.getTime(); // Descending order
       });
 
-      // Limit to 5 most recent positions; enforce bullets: 9, 7, 6, 5, 5
+      // Limit to 5 most recent positions; cap bullets by tenure (not fixed slot order)
       if (resumeData.experience.length > 5) {
         resumeData.experience = resumeData.experience.slice(0, 5);
       }
-      resumeData.experience = normalizeExperienceBullets(
-        resumeData.experience,
-        profileData
-      );
-
-      if (experienceNeedsBulletExpansion(resumeData.experience)) {
-        resumeData.experience = await expandExperienceBulletsWithAI(
-          resumeData.experience,
-          jd,
-          providerUsed,
-          modelUsed || selectedModel
-        );
-        resumeData.experience = normalizeExperienceBullets(
-          resumeData.experience,
-          profileData
-        );
-      }
+      resumeData.experience = resumeData.experience.map((exp: any) => {
+        if (exp.achievements && Array.isArray(exp.achievements)) {
+          const seenAchievements = new Set<string>();
+          const uniqueAchievements = exp.achievements.filter((ach: string) => {
+            const normalized = ach.trim().toLowerCase();
+            if (seenAchievements.has(normalized)) return false;
+            seenAchievements.add(normalized);
+            return true;
+          });
+          const tenureYears = getTenureYears(exp.startDate || "", exp.endDate || "Present");
+          const maxBullets = getBulletCountForTenure(tenureYears);
+          exp.achievements = uniqueAchievements.slice(0, maxBullets);
+        }
+        return exp;
+      });
     }
 
     // Template is provided in the request; default to 'standard' if missing
