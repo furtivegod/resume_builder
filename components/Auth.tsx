@@ -45,11 +45,11 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
 
       <div className="mx-auto flex min-h-[80vh] w-full max-w-5xl items-center justify-center">
         <div className="grid w-full gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <section className="animate-rise-in hidden rounded-3xl border border-white/70 bg-gradient-to-br from-slate-900 to-slate-800 p-10 text-white shadow-2xl lg:block">
-            <p className="mb-4 inline-flex rounded-full border border-white/30 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
+          <section className="animate-rise-in hidden rounded-3xl border border-white/20 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-10 text-white shadow-[0_30px_80px_-40px_rgba(15,23,42,0.8)] lg:block">
+            <p className="mb-4 inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
               Resume Tailor
             </p>
-            <h1 className="mb-4 text-4xl font-semibold leading-tight" style={{ fontFamily: "var(--font-display)" }}>
+            <h1 className="font-display mb-4 text-4xl font-semibold leading-tight tracking-tight">
               Craft job-ready resumes with a cleaner, faster workflow
             </h1>
             <p className="max-w-md text-slate-200">
@@ -58,22 +58,16 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
           </section>
 
           <section className="glass-panel animate-rise-in p-8 sm:p-10">
-            <h2 className="mb-2 text-3xl font-semibold text-slate-900" style={{ fontFamily: "var(--font-display)" }}>
+            <h2 className="font-display mb-2 text-3xl font-semibold tracking-tight text-slate-900">
               Welcome back
             </h2>
-            <p className="mb-8 text-sm text-slate-600">
-          Sign in to continue
-            </p>
+            <p className="mb-8 text-sm text-slate-600">Sign in to continue tailoring resumes.</p>
 
             <form onSubmit={handleSignIn} className="space-y-4">
-              {error && (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-                  <p className="text-sm text-red-700">{error}</p>
-                </div>
-              )}
+              {error && <div className="alert-error">{error}</div>}
 
               <div>
-                <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-700">
+                <label htmlFor="email" className="field-label">
                   Email
                 </label>
                 <input
@@ -88,7 +82,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
               </div>
 
               <div>
-                <label htmlFor="password" className="mb-2 block text-sm font-medium text-slate-700">
+                <label htmlFor="password" className="field-label">
                   Password
                 </label>
                 <input

@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callAI } from "@/lib/ai-provider";
 import type { AIMessage } from "@/lib/ai-provider";
+import { AuthError, requireAuthClient } from "@/lib/supabase/server-client";
 
 export async function POST(request: NextRequest) {
   try {
+    await requireAuthClient(request);
+
     const { resume, jd, apiProvider = "openai" } = await request.json();
 
     if (!resume || typeof resume !== "object") {
@@ -99,6 +102,9 @@ Candidate name for sign-off: ${candidateName}`;
 
     return NextResponse.json({ coverLetter });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Error generating cover letter:", error);
     return NextResponse.json(
       {

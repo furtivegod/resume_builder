@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callAI } from "@/lib/ai-provider";
+import { callAI, formatAIProviderError } from "@/lib/ai-provider";
 import type { AIMessage } from "@/lib/ai-provider";
 import fs from "fs/promises";
 import path from "path";
@@ -19,14 +19,17 @@ import {
   DEFAULT_RESUME_TEMPLATE,
   isValidResumeTemplate,
 } from "@/lib/resume-templates";
+import { AuthError, requireAuthClient } from "@/lib/supabase/server-client";
 
-// centralized provider used below
+/** Resume + PDF generation can take several minutes. */
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
-  // Declare resumeData outside try block so it's accessible in catch block
   let resumeData: any = undefined;
 
   try {
+    await requireAuthClient(request);
+
     const {
       account,
       jd,
@@ -67,8 +70,14 @@ export async function POST(request: NextRequest) {
       ? buildBulletGuidanceFromProfile(profileData)
       : "";
 
+    const MAX_JD_CHARS = Number(process.env.ANALYZE_MAX_JD_CHARS || 12_000);
+    const trimmedJd =
+      jd.length > MAX_JD_CHARS
+        ? `${jd.slice(0, MAX_JD_CHARS)}\n\n[Job description truncated for length.]`
+        : jd;
+
     const userPrompt = `Job Description:
-${jd}
+${trimmedJd}
 
 Existing Resume Content (USE AS REFERENCE ONLY - DO NOT COPY VERBATIM):
 ${resumeContent}${bulletGuidance}`;
@@ -85,8 +94,9 @@ ${resumeContent}${bulletGuidance}`;
         ? process.env.DEEPSEEK_MODEL
         : process.env.ANTHROPIC_MODEL;
 
-    // Deepseek responses can be cut for long resumes; allow a larger completion budget.
-    const generationMaxTokens = apiProvider === "deepseek" ? 8192 : 4096;
+    // Deepseek responses can be cut for long resumes; OpenAI/Claude use a smaller budget for reliability.
+    const generationMaxTokens =
+      apiProvider === "deepseek" ? 8192 : apiProvider === "openai" ? 3072 : 4096;
 
     const sanitizeJobTitle = (rawTitle: unknown): string => {
       const original = String(rawTitle || "").trim().replace(/\s+/g, " ");
@@ -130,8 +140,9 @@ ${resumeContent}${bulletGuidance}`;
         jsonText = aiResp.text || "";
       }
     } catch (err: any) {
-      // Re-throw so outer catch handles it and responds accordingly
-      throw err;
+      throw new Error(
+        formatAIProviderError(err, apiProvider, err?.elapsedMs)
+      );
     }
 
     const cleanAchievements = (items: unknown): string[] =>
@@ -799,6 +810,9 @@ ${resumeContent}${bulletGuidance}`;
       ...(pdfError && { pdfError }),
     });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Error analyzing resume:", error);
     // If we have resumeData, still return it even if there was an error
     // This handles cases where the error occurred after resume generation
@@ -816,7 +830,12 @@ ${resumeContent}${bulletGuidance}`;
             ? error.message
             : "An error occurred while analyzing the resume",
       },
-      { status: 500 }
+      {
+        status:
+          error instanceof Error && /timed out|timeout/i.test(error.message)
+            ? 504
+            : 500,
+      }
     );
   }
 }

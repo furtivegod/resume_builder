@@ -1,7 +1,13 @@
 "use client";
 
 import React from "react";
-import { AnalysisResult } from "@/app/page";
+import type { AnalysisResult } from "@/lib/types/resume";
+import { ToastContainer, useToast } from "@/components/Toast";
+import { supabase } from "@/lib/supabase";
+import { uploadCoverLetterJson } from "@/lib/supabase/storage";
+import { createResumeWithArtifacts } from "@/lib/supabase/services/resumes";
+import { DEFAULT_JOBSITE, type JobsiteId } from "@/lib/jobsites";
+import { formatSupabaseConnectionError, isSupabaseNetworkError } from "@/lib/supabase/network";
 
 export interface QuestionAnswer {
   question: string;
@@ -17,6 +23,11 @@ interface ResultDisplayProps {
   modelUsed?: string;
   jobRole?: string;
   companyName?: string;
+  jobLink?: string;
+  jobsite?: JobsiteId;
+  resumeId?: string;
+  userId?: string;
+  onResumeSaved?: (resumeId: string) => void;
   questionsText: string;
   setQuestionsText: (value: string) => void;
   coverLetter: string;
@@ -24,15 +35,18 @@ interface ResultDisplayProps {
   answers: QuestionAnswer[];
   setAnswers: (value: QuestionAnswer[]) => void;
   lastJd?: string;
-  downloadPath?: string;
 }
 
-type ToastType = "success" | "error" | "warning";
-
-interface ToastMessage {
-  id: number;
-  type: ToastType;
-  message: string;
+function downloadPdfFromBase64(
+  pdfBase64: string,
+  fileName: string
+): void {
+  const link = document.createElement("a");
+  link.href = `data:application/pdf;base64,${pdfBase64}`;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 export default function ResultDisplay({
@@ -44,6 +58,11 @@ export default function ResultDisplay({
   modelUsed,
   jobRole = "",
   companyName = "",
+  jobLink = "",
+  jobsite = DEFAULT_JOBSITE,
+  resumeId,
+  userId,
+  onResumeSaved,
   questionsText,
   setQuestionsText,
   coverLetter,
@@ -51,62 +70,107 @@ export default function ResultDisplay({
   answers,
   setAnswers,
   lastJd = "",
-  downloadPath = "",
 }: ResultDisplayProps) {
   const [isDownloading, setIsDownloading] = React.useState(false);
+  const [savedResumeId, setSavedResumeId] = React.useState<string | undefined>(resumeId);
   const [answersLoading, setAnswersLoading] = React.useState(false);
   const [answersError, setAnswersError] = React.useState<string | null>(null);
   const [coverLetterLoading, setCoverLetterLoading] = React.useState(false);
-  const [coverLetterDownloading, setCoverLetterDownloading] = React.useState(false);
+  const [coverLetterSaving, setCoverLetterSaving] = React.useState(false);
   const [coverLetterCopied, setCoverLetterCopied] = React.useState(false);
-  const [toasts, setToasts] = React.useState<ToastMessage[]>([]);
+  const { toasts, showToast, dismissToast } = useToast();
 
-  const showToast = React.useCallback((type: ToastType, message: string) => {
-    const id = Date.now() + Math.floor(Math.random() * 1000);
-    setToasts((prev) => [...prev, { id, type, message }]);
+  React.useEffect(() => {
+    setSavedResumeId(resumeId);
+  }, [resumeId]);
 
-    window.setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    }, 3500);
-  }, []);
+  const effectiveResumeId = savedResumeId ?? resumeId;
 
   const handleDownloadPDF = React.useCallback(async () => {
-    if (!pdfBase64 || isDownloading) return;
+    if (!pdfBase64 || isDownloading || !userId) return;
+
     setIsDownloading(true);
+    const safeName = (result.name || "resume").replace(/[^a-z0-9]/gi, "_");
+    const role = jobRole?.trim() || "job";
+    const company = companyName?.trim() || "company";
+    const fileName = `${safeName}_${role}_${company}.pdf`.replace(/_+/g, "_");
+
     try {
-      const fileName = `${(result.name || "resume").replace(/[^a-z0-9]/gi, "_")}.pdf`;
-      const saveRes = await fetch("/api/save-resume", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pdfBase64,
-          jobRole: jobRole?.trim() || "job",
-          companyName: companyName?.trim() || "company",
-          fileName,
-          jobDescription: lastJd,
-          downloadPath: downloadPath?.trim() || "",
-        }),
-      });
-      if (!saveRes.ok) {
-        const err = await saveRes.json().catch(() => ({}));
-        throw new Error(err.error || saveRes.statusText);
+      let newlySaved = false;
+
+      if (!effectiveResumeId) {
+        const record = await createResumeWithArtifacts({
+          userId,
+          jd: lastJd,
+          resume: result,
+          aiType: providerUsed ?? sessionApiProvider,
+          model: modelUsed ?? null,
+          jobSite: jobsite,
+          jobLink: jobLink.trim() || null,
+          jobTitle: jobRole.trim() || null,
+          jobCompany: companyName.trim() || null,
+        });
+        setSavedResumeId(record.id);
+        onResumeSaved?.(record.id);
+        newlySaved = true;
       }
-      const saveData = await saveRes.json().catch(() => ({}));
-      showToast("success", `Saved to: ${saveData.path || "resume folder"}`);
+
+      downloadPdfFromBase64(pdfBase64, fileName);
+      showToast(
+        "success",
+        newlySaved ? "Saved to history & PDF downloaded" : "PDF downloaded"
+      );
     } catch (error) {
-      showToast("error", `Failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      console.error("Failed to save resume history:", error);
+      const message = isSupabaseNetworkError(error)
+        ? formatSupabaseConnectionError(error)
+        : error instanceof Error
+          ? error.message
+          : "Could not save to history";
+
+      try {
+        downloadPdfFromBase64(pdfBase64, fileName);
+        showToast("warning", `${message} PDF downloaded locally only.`);
+      } catch (downloadError) {
+        showToast(
+          "error",
+          `Failed: ${downloadError instanceof Error ? downloadError.message : "Unknown error"}`
+        );
+      }
     } finally {
       setIsDownloading(false);
     }
-  }, [pdfBase64, result.name, jobRole, companyName, lastJd, downloadPath, isDownloading, showToast]);
+  }, [
+    pdfBase64,
+    isDownloading,
+    userId,
+    result,
+    jobRole,
+    companyName,
+    lastJd,
+    effectiveResumeId,
+    providerUsed,
+    sessionApiProvider,
+    modelUsed,
+    jobsite,
+    jobLink,
+    onResumeSaved,
+    showToast,
+  ]);
 
   const handleCoverLetter = React.useCallback(async () => {
     setCoverLetterLoading(true);
     setCoverLetter("");
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch("/api/cover-letter", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {}),
+        },
         body: JSON.stringify({ resume: result, jd: lastJd, apiProvider: sessionApiProvider }),
       });
       if (!res.ok) {
@@ -115,13 +179,36 @@ export default function ResultDisplay({
       }
       const data = await res.json();
       setCoverLetter(data.coverLetter || "");
-      showToast("success", "Cover letter ready — copy or save as PDF.");
+      showToast("success", "Cover letter ready — copy or save to cloud.");
     } catch (err) {
       showToast("error", `Cover letter failed: ${err instanceof Error ? err.message : "Error"}`);
     } finally {
       setCoverLetterLoading(false);
     }
   }, [result, lastJd, sessionApiProvider, setCoverLetter, showToast]);
+
+  const handleSaveCoverLetter = React.useCallback(async () => {
+    if (!coverLetter || coverLetterSaving || !effectiveResumeId || !userId) {
+      if (!effectiveResumeId) {
+        showToast("warning", "Download the PDF first to save this bid to history.");
+      }
+      return;
+    }
+    setCoverLetterSaving(true);
+    try {
+      await uploadCoverLetterJson(userId, effectiveResumeId, {
+        text: coverLetter,
+        jobTitle: jobRole,
+        jobCompany: companyName,
+        generatedAt: new Date().toISOString(),
+      });
+      showToast("success", "Cover letter saved to cloud storage.");
+    } catch (err) {
+      showToast("error", `Failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+    } finally {
+      setCoverLetterSaving(false);
+    }
+  }, [coverLetter, coverLetterSaving, effectiveResumeId, userId, jobRole, companyName, showToast]);
 
   const handleCopyCoverLetter = React.useCallback(async () => {
     if (!coverLetter) return;
@@ -133,32 +220,6 @@ export default function ResultDisplay({
       showToast("error", "Copy failed");
     }
   }, [coverLetter, showToast]);
-
-  const handleDownloadCoverLetter = React.useCallback(async () => {
-    if (!coverLetter || coverLetterDownloading) return;
-    setCoverLetterDownloading(true);
-    try {
-      const res = await fetch("/api/save-cover-letter", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          coverLetter,
-          jobRole: jobRole?.trim() || "job",
-          companyName: companyName?.trim() || "company",
-          candidateName: result.name || "resume",
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || res.statusText);
-      }
-      showToast("success", `Cover letter saved to: ${data.path || "resume folder"}`);
-    } catch (err) {
-      showToast("error", `Failed: ${err instanceof Error ? err.message : "Unknown error"}`);
-    } finally {
-      setCoverLetterDownloading(false);
-    }
-  }, [coverLetter, jobRole, companyName, result.name, coverLetterDownloading, showToast]);
 
   const handleGetAnswers = React.useCallback(async () => {
     const questions = questionsText
@@ -173,9 +234,15 @@ export default function ResultDisplay({
     setAnswersError(null);
     setAnswers([]);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch("/api/answer-questions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {}),
+        },
         body: JSON.stringify({ questions, resume: result, apiProvider: sessionApiProvider }),
       });
       if (!res.ok) {
@@ -195,14 +262,7 @@ export default function ResultDisplay({
 
   return (
     <div className="flex flex-col gap-4 pb-2">
-      {toasts.length > 0 && (
-        <div className="fixed right-4 top-16 z-[100] flex w-80 flex-col gap-2">
-          {toasts.map((toast) => {
-            const cls = toast.type === "success" ? "bg-emerald-600" : toast.type === "error" ? "bg-red-600" : "bg-amber-500";
-            return <div key={toast.id} className={`${cls} rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg`}>{toast.message}</div>;
-          })}
-        </div>
-      )}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
         <svg className="h-5 w-5 flex-shrink-0 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -213,6 +273,9 @@ export default function ResultDisplay({
           {(providerUsed || modelUsed) && (
             <p className="text-xs text-emerald-700">{(providerUsed || sessionApiProvider || "").toUpperCase()}{modelUsed ? ` · ${modelUsed}` : ""}</p>
           )}
+          {effectiveResumeId && (
+            <p className="text-xs text-emerald-600">Saved to cloud · <a href="/history" className="underline">View history</a></p>
+          )}
         </div>
       </div>
 
@@ -220,11 +283,19 @@ export default function ResultDisplay({
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">PDF issue: {pdfError}</div>
       )}
 
-      <button onClick={handleDownloadPDF} disabled={!pdfBase64 || isDownloading} className="btn-primary w-full gap-2">
+      <button onClick={handleDownloadPDF} disabled={!pdfBase64 || isDownloading || !userId} className="btn-primary w-full gap-2">
         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
-        {isDownloading ? "Saving…" : !pdfBase64 ? (pdfError ? "PDF unavailable" : "Generating PDF…") : "Save Resume PDF"}
+        {isDownloading
+          ? "Saving…"
+          : !pdfBase64
+            ? pdfError
+              ? "PDF unavailable"
+              : "Generating PDF…"
+            : effectiveResumeId
+              ? "Download PDF"
+              : "Save & Download PDF"}
       </button>
 
       <div className="flex gap-2">
@@ -236,11 +307,8 @@ export default function ResultDisplay({
             <button onClick={handleCopyCoverLetter} className="btn-primary px-5">
               {coverLetterCopied ? "Copied!" : "Copy"}
             </button>
-            <button onClick={handleDownloadCoverLetter} disabled={coverLetterDownloading} className="btn-primary gap-2 px-4">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              {coverLetterDownloading ? "Saving…" : "PDF"}
+            <button onClick={handleSaveCoverLetter} disabled={coverLetterSaving || !effectiveResumeId} className="btn-primary gap-2 px-4">
+              {coverLetterSaving ? "Saving…" : "Save JSON"}
             </button>
           </>
         )}

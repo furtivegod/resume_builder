@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callAI } from "@/lib/ai-provider";
 import type { AIMessage } from "@/lib/ai-provider";
+import { AuthError, requireAuthClient } from "@/lib/supabase/server-client";
 
 export async function POST(request: NextRequest) {
   try {
+    await requireAuthClient(request);
+
     const { questions, resume, apiProvider = "openai" } = await request.json();
 
     if (!questions || !Array.isArray(questions) || questions.length === 0) {
@@ -116,6 +119,9 @@ Return a JSON array with one object per question in the same order: [{"question"
 
     return NextResponse.json({ answers });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Error answering questions:", error);
     return NextResponse.json(
       {

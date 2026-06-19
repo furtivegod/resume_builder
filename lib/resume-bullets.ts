@@ -1,3 +1,6 @@
+import type { ProfileBundle } from "@/lib/supabase/database.types";
+import { userCompanyToResumeExperience } from "@/lib/mappers/profile-to-resume";
+
 export function parseExperienceDate(dateStr: string): Date {
   if (!dateStr || String(dateStr).toLowerCase() === "present") {
     return new Date();
@@ -65,26 +68,29 @@ export function getBulletTargetsForExperience(
   });
 }
 
-export function buildBulletGuidanceFromProfile(profileData: {
-  company_1?: { title?: string; company?: string; startDate?: string; endDate?: string } | null;
-  company_2?: { title?: string; company?: string; startDate?: string; endDate?: string } | null;
-  company_3?: { title?: string; company?: string; startDate?: string; endDate?: string } | null;
-  company_4?: { title?: string; company?: string; startDate?: string; endDate?: string } | null;
-  company_5?: { title?: string; company?: string; startDate?: string; endDate?: string } | null;
-}): string {
-  const companies = [
-    profileData.company_1,
-    profileData.company_2,
-    profileData.company_3,
-    profileData.company_4,
-    profileData.company_5,
-  ].filter(Boolean) as Array<{
+type LegacyCompanySlot = {
+  title?: string;
+  company?: string;
+  startDate?: string;
+  endDate?: string;
+} | null;
+
+export type LegacyCompanyProfile = {
+  company_1?: LegacyCompanySlot;
+  company_2?: LegacyCompanySlot;
+  company_3?: LegacyCompanySlot;
+  company_4?: LegacyCompanySlot;
+  company_5?: LegacyCompanySlot;
+};
+
+export function buildBulletGuidanceFromCompanies(
+  companies: Array<{
     title?: string;
     company?: string;
     startDate?: string;
     endDate?: string;
-  }>;
-
+  }>
+): string {
   if (companies.length === 0) return "";
 
   const sorted = [...companies].sort((a, b) => {
@@ -116,6 +122,28 @@ Shorter tenures get fewer bullets; longer tenures get more. This keeps the resum
 
 ${lines.join("\n")}
 `;
+}
+
+export function buildBulletGuidanceFromProfile(
+  profileData: LegacyCompanyProfile | ProfileBundle
+): string {
+  const companies =
+    "companies" in profileData
+      ? profileData.companies.map(userCompanyToResumeExperience)
+      : ([
+          profileData.company_1,
+          profileData.company_2,
+          profileData.company_3,
+          profileData.company_4,
+          profileData.company_5,
+        ].filter(Boolean) as Array<{
+          title?: string;
+          company?: string;
+          startDate?: string;
+          endDate?: string;
+        }>);
+
+  return buildBulletGuidanceFromCompanies(companies);
 }
 
 export function formatTenureLabel(years: number): string {

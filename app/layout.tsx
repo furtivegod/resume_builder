@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { AuthProvider } from "@/components/AuthProvider";
+import { Providers } from "@/components/Providers";
 
 export const metadata: Metadata = {
   title: "Resume Generator",
@@ -15,9 +15,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="font-sans antialiased">
-        <AuthProvider>{children}</AuthProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
 }
-
