@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import type { ProfileFormState } from "@/lib/mappers/profile-form";
 import { updateProfile } from "@/lib/supabase/services/profiles";
+import { loadProfileBundleForUser } from "@/lib/supabase/load-profile-bundle";
 import { syncEducations } from "@/lib/supabase/services/user-educations";
 import { syncCertifications } from "@/lib/supabase/services/user-certifications";
 import { syncProjects } from "@/lib/supabase/services/user-projects";
@@ -12,6 +13,8 @@ export async function saveProfileForm(
   form: ProfileFormState,
   client: SupabaseClient = supabase
 ): Promise<void> {
+  const bundle = await loadProfileBundleForUser(userId, client);
+
   await updateProfile(
     userId,
     {
@@ -21,6 +24,7 @@ export async function saveProfileForm(
       linkedin_url: form.linkedin.trim() || null,
       summary: form.summary.trim() || null,
       default_settings: {
+        ...bundle.profile.default_settings,
         resume_template: form.resumeTemplate,
       },
     },

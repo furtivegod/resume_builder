@@ -1,10 +1,19 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { NextRequest } from "next/server";
+import { createFetchWithTimeout } from "@/lib/proxy-fetch";
+import { SUPABASE_FETCH_TIMEOUT_MS } from "@/lib/supabase/network";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const serverFetch = createFetchWithTimeout(SUPABASE_FETCH_TIMEOUT_MS);
 
-export function getAccessTokenFromRequest(request: NextRequest): string | null {
+/** Minimal request shape for auth (Next.js, Express adapter, etc.) */
+export type AuthRequest = {
+  headers: {
+    get(name: string): string | null;
+  };
+};
+
+export function getAccessTokenFromRequest(request: AuthRequest): string | null {
   const auth = request.headers.get("Authorization");
   if (auth?.startsWith("Bearer ")) {
     return auth.slice(7).trim() || null;
@@ -23,12 +32,13 @@ export function createServerSupabaseClient(accessToken: string): SupabaseClient 
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
+      fetch: serverFetch,
     },
   });
 }
 
 export async function requireAuthClient(
-  request: NextRequest
+  request: AuthRequest
 ): Promise<{ client: SupabaseClient; accessToken: string; userId: string }> {
   const accessToken = getAccessTokenFromRequest(request);
   if (!accessToken) {

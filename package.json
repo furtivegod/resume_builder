@@ -1,38 +1,20 @@
 {
-  "name": "resume-generator",
+  "name": "resume-monorepo",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "dev:quiet": "cross-env NODE_OPTIONS=--no-deprecation next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.100.1",
-    "@fontsource-variable/manrope": "^5.2.8",
-    "@fontsource-variable/space-grotesk": "^5.2.10",
-    "@supabase/supabase-js": "^2.86.2",
-    "mustache": "^4.2.0",
-    "next": "^14.2.0",
-    "openai": "^6.16.0",
-    "puppeteer": "^25.1.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "undici": "^7.28.0"
+    "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev -w resume-backend\" \"npm run dev -w resume-frontend\"",
+    "dev:frontend": "npm run dev -w resume-frontend",
+    "dev:backend": "npm run dev -w resume-backend",
+    "build": "npm run build -w resume-backend && npm run build -w resume-frontend",
+    "start:frontend": "npm run start -w resume-frontend",
+    "start:backend": "npm run start -w resume-backend"
   },
   "devDependencies": {
-    "@types/mustache": "^4.2.6",
-    "@types/node": "^20.14.0",
-    "@types/react": "^18.3.0",
-    "@types/react-dom": "^18.3.0",
-    "autoprefixer": "^10.4.19",
-    "cross-env": "^10.1.0",
-    "eslint": "^8.57.0",
-    "eslint-config-next": "^14.2.0",
-    "postcss": "^8.4.39",
-    "tailwindcss": "^3.4.4",
-    "typescript": "^5.5.0"
+    "concurrently": "^9.1.0"
   }
 }
