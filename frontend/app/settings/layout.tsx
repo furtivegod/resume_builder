@@ -29,9 +29,10 @@ export default function SettingsLayout({
           <aside className="glass-panel w-full shrink-0 overflow-hidden md:w-52">
             <nav className="flex flex-row gap-1 p-2 md:flex-col">
               {SETTINGS_NAV.map((item) => {
-                const active = item.exact
-                  ? pathname === item.href
-                  : pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const active =
+                  "exact" in item && item.exact
+                    ? pathname === item.href
+                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
                 return (
                   <Link
                     key={item.href}
