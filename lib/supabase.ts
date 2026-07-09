@@ -14,7 +14,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
 const authOptions = {
   autoRefreshToken: true,
   persistSession: true,
-  detectSessionInUrl: true,
+  // Password-only auth — no OAuth/magic-link callbacks. Avoids URL rewrites on HTTP + bare IP.
+  detectSessionInUrl: false,
   storageKey: "resume-app-auth",
 } as const;
 

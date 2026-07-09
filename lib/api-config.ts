@@ -4,7 +4,12 @@
  * Leave empty in local dev to use Next.js rewrites to the backend (see frontend/next.config.js).
  */
 export function getApiBaseUrl(): string {
-  return (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/+$/, "");
+  let raw = (process.env.NEXT_PUBLIC_API_URL || "").trim().replace(/\/+$/, "");
+  if (!raw) return "";
+  if (!/^https?:\/\//i.test(raw)) {
+    raw = `http://${raw}`;
+  }
+  return raw;
 }
 
 /** Build a full API path. Paths should start with /api/… */
