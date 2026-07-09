@@ -25,10 +25,10 @@ export default function PromptSettingsPage() {
   const defaultTemplate = useMemo(() => getDefaultResumeGeneratePromptTemplate(), []);
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!authLoading && user?.id) {
       void loadPrompt();
     }
-  }, [authLoading, user]);
+  }, [authLoading, user?.id]);
 
   const loadPrompt = async () => {
     if (!user) return;

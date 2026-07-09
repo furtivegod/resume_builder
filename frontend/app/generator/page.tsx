@@ -27,7 +27,7 @@ import type { LegacyAnalyzeProfile } from "@/lib/mappers/profile-to-resume";
 import { loadProfileForApp } from "@/lib/supabase/load-profile-for-app";
 import { loadApplyAlertSettings } from "@/lib/supabase/services/apply-alert-settings";
 import { listResumes } from "@/lib/supabase/services/resumes";
-import { createResumeWithArtifacts } from "@/lib/supabase/services/resumes";
+import { createResumeWithArtifacts, updateResumeAiCosts } from "@/lib/supabase/services/resumes";
 import {
   findDuplicateCompanyApplications,
   type DuplicateApplicationMatch,
@@ -54,6 +54,7 @@ import type { AtsMatchResult } from "@/lib/types/ats-match";
 import { fetchAtsMatch } from "@/lib/check-ats-client";
 import { DEFAULT_AI_SETTINGS } from "@/lib/ai-settings";
 import { loadAiSettings } from "@/lib/supabase/services/ai-settings";
+import { sumCosts } from "@/lib/ai-usage";
 import { apiUrl } from "@/lib/api-config";
 import {
   loadGeneratorWorkspace,
@@ -107,6 +108,7 @@ interface AnalysisSession {
   extractCostUsd?: number;
   generationCostUsd?: number;
   atsCostUsd?: number;
+  answersCostUsd?: number;
 }
 
 let sessionCounter = 0;
@@ -143,6 +145,7 @@ function toSessionView(session: AnalysisSession): AnalysisSessionView {
     result: session.result,
     downloading: session.downloading,
     downloadError: session.downloadError,
+    resumeId: session.resumeId,
     providerUsed: session.providerUsed,
     modelUsed: session.modelUsed,
     extractMs: session.extractMs,
@@ -154,6 +157,7 @@ function toSessionView(session: AnalysisSession): AnalysisSessionView {
     extractCostUsd: session.extractCostUsd,
     generationCostUsd: session.generationCostUsd,
     atsCostUsd: session.atsCostUsd,
+    answersCostUsd: session.answersCostUsd,
   };
 }
 
@@ -230,6 +234,25 @@ export default function GeneratorPage() {
     );
   }, []);
 
+  const recordAnswersCost = useCallback((sessionId: string, costUsd: number) => {
+    if (!Number.isFinite(costUsd) || costUsd <= 0) return;
+
+    setSessions((prev) =>
+      prev.map((session) => {
+        if (session.id !== sessionId) return session;
+
+        const answersCostUsd = sumCosts(session.answersCostUsd, costUsd);
+        if (session.resumeId) {
+          void updateResumeAiCosts(session.resumeId, { answersCostUsd }).catch((error) => {
+            console.warn("Failed to save answers cost to history:", error);
+          });
+        }
+
+        return { ...session, answersCostUsd };
+      })
+    );
+  }, []);
+
   const runAutoAtsCheck = useCallback(
     async (
       sessionId: string,
@@ -240,6 +263,7 @@ export default function GeneratorPage() {
         aiProvider: string;
         useOpenRouter: boolean;
         accessToken: string;
+        resumeRecordId?: string;
       }
     ) => {
       if (!context.jobDescription.trim()) return;
@@ -265,6 +289,17 @@ export default function GeneratorPage() {
           atsError: null,
           atsCostUsd: ats.atsCostUsd,
         });
+
+        if (context.resumeRecordId) {
+          try {
+            await updateResumeAiCosts(context.resumeRecordId, {
+              atsCostUsd: ats.atsCostUsd,
+              atsScore: ats.ats.score,
+            });
+          } catch (error) {
+            console.warn("Failed to save ATS result to history:", error);
+          }
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to check ATS match";
         patchSession(sessionId, { atsLoading: false, atsResult: null, atsError: message });
@@ -621,6 +656,12 @@ export default function GeneratorPage() {
             jobLink: null,
             jobTitle: session.jobTitle.trim() || null,
             jobCompany: session.companyName.trim() || null,
+            salary: session.salary.trim() || null,
+            postedDate: session.postedDate.trim() || null,
+            jobTypes: session.jobTypes,
+            requiresTravel: session.requiresTravel,
+            extractCostUsd: session.extractCostUsd,
+            generationCostUsd: data.generationCostUsd,
           }),
         ]);
 
@@ -638,6 +679,7 @@ export default function GeneratorPage() {
             aiProvider: session.aiProvider,
             useOpenRouter: session.useOpenRouter,
             accessToken: authSession.access_token,
+            resumeRecordId: record.id,
           });
         }
       } catch (err) {
@@ -699,6 +741,11 @@ export default function GeneratorPage() {
         apiProvider={answerDialogSession?.aiProvider ?? aiProvider}
         useOpenRouter={answerDialogSession?.useOpenRouter ?? useOpenRouter}
         onError={(message) => showToast("error", message)}
+        onAnswersCost={(costUsd) => {
+          if (answerDialogSessionId) {
+            recordAnswersCost(answerDialogSessionId, costUsd);
+          }
+        }}
       />
 
       <div className="flex min-h-0 flex-1 gap-4 overflow-hidden">
@@ -815,6 +862,12 @@ export default function GeneratorPage() {
                   session={toSessionView(session)}
                   onGenerateResume={handleGenerateResume}
                   onGenerateAnswers={setAnswerDialogSessionId}
+                  onAtsSaved={(sessionId, payload) => {
+                    patchSession(sessionId, {
+                      atsResult: payload.atsResult,
+                      atsCostUsd: payload.atsCostUsd,
+                    });
+                  }}
                   onClose={dismissSession}
                   onError={(message) => showToast("error", message)}
                 />

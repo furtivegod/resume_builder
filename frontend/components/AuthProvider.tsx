@@ -51,17 +51,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      // Token refresh on tab focus should not reset UI or re-run profile loads.
-      if (
-        event === "TOKEN_REFRESHED" &&
-        session?.user?.id &&
-        ensuredUserIdRef.current === session.user.id
-      ) {
+      const nextUser = session?.user ?? null;
+      const nextUserId = nextUser?.id ?? null;
+
+      // Token refresh on tab focus — session is still valid; don't touch React state.
+      if (event === "TOKEN_REFRESHED" && nextUserId && ensuredUserIdRef.current === nextUserId) {
         finishLoading();
         return;
       }
 
-      void applySession(session?.user ?? null);
+      // Same signed-in user re-emitted (common when returning to a background tab).
+      if (nextUserId && ensuredUserIdRef.current === nextUserId) {
+        finishLoading();
+        return;
+      }
+
+      void applySession(nextUser);
       finishLoading();
     });
 

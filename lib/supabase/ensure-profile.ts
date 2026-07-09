@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import type { Profile } from "@/lib/supabase/database.types";
+import { DEFAULT_STORED_USER_LEVEL, parseStoredUserLevel } from "@/lib/user-level";
 import { isSupabaseNetworkError } from "@/lib/supabase/network";
 
 /**
@@ -27,13 +28,14 @@ export async function ensureProfile(
     if (existing) {
       return {
         ...existing,
+        user_level: parseStoredUserLevel(existing.user_level),
         default_settings: existing.default_settings ?? {},
       } as Profile;
     }
 
     const { data: created, error: insertError } = await client
       .from("profiles")
-      .insert({ id: userId, default_settings: {} })
+      .insert({ id: userId, default_settings: {}, user_level: DEFAULT_STORED_USER_LEVEL })
       .select("*")
       .single();
 
@@ -44,6 +46,7 @@ export async function ensureProfile(
 
     return {
       ...created,
+      user_level: parseStoredUserLevel(created.user_level),
       default_settings: created.default_settings ?? {},
     } as Profile;
   } catch (error) {

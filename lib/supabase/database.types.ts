@@ -1,5 +1,6 @@
 import type { ResumeTemplateId } from "@/lib/resume-templates";
 import type { JobsiteId } from "@/lib/jobsites";
+import type { JobWorkType } from "@/lib/prompts/job-page-extract";
 
 export type WorkType = "Remote" | "Hybrid" | "Onsite";
 
@@ -18,6 +19,11 @@ export type InterviewCallType =
   | "culture"
   | "final";
 
+/** Stored on profiles.user_level — admin is env-based, not stored here. */
+export type StoredUserLevel = "manager" | "bidder" | "member";
+
+export type UserLevel = "admin" | StoredUserLevel;
+
 /** Stored in profiles.default_settings — not separate columns. */
 export interface DefaultSettings {
   resume_template?: ResumeTemplateId;
@@ -32,6 +38,8 @@ export interface Profile {
   linkedin_url: string | null;
   summary: string | null;
   location: string | null;
+  user_level: StoredUserLevel;
+  admin_note: string | null;
   default_settings: DefaultSettings;
   created_at: string;
   updated_at: string;
@@ -44,6 +52,8 @@ export interface ProfileInsert {
   linkedin_url?: string | null;
   summary?: string | null;
   location?: string | null;
+  user_level?: StoredUserLevel;
+  admin_note?: string | null;
   default_settings?: DefaultSettings;
 }
 
@@ -53,6 +63,8 @@ export interface ProfileUpdate {
   linkedin_url?: string | null;
   summary?: string | null;
   location?: string | null;
+  user_level?: StoredUserLevel;
+  admin_note?: string | null;
   default_settings?: DefaultSettings;
 }
 
@@ -135,6 +147,15 @@ export interface ResumeRecord {
   job_link: string | null;
   job_title: string | null;
   job_company: string | null;
+  salary: string | null;
+  posted_date: string | null;
+  job_types: JobWorkType[] | null;
+  requires_travel: boolean | null;
+  extract_cost_usd: number | null;
+  generation_cost_usd: number | null;
+  ats_cost_usd: number | null;
+  answers_cost_usd: number | null;
+  ats_score: number | null;
   jd_file_path: string | null;
   resume_file_path: string | null;
   bid_status: BidStatus | null;

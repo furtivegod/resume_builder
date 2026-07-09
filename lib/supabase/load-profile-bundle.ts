@@ -12,10 +12,12 @@ import type {
   UserProject,
   UserSkill,
 } from "@/lib/supabase/database.types";
+import { parseStoredUserLevel } from "@/lib/user-level";
 
 function normalizeProfile(row: Profile): Profile {
   return {
     ...row,
+    user_level: parseStoredUserLevel(row.user_level),
     default_settings: row.default_settings ?? {},
   };
 }

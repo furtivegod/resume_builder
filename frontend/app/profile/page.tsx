@@ -76,10 +76,10 @@ export default function ProfilePage() {
   const { toasts, showToast, dismissToast } = useToast();
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!authLoading && user?.id) {
       loadProfile();
     }
-  }, [authLoading, user]);
+  }, [authLoading, user?.id]);
 
   const loadProfile = async () => {
     if (!user) return;

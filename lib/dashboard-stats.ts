@@ -235,6 +235,15 @@ export function getMonthStartKey(reference = new Date()): string {
   return `${y}-${m}-01`;
 }
 
+/** Monday as the first day of the week. */
+export function getWeekStartKey(reference = new Date()): string {
+  const d = new Date(reference);
+  const weekday = d.getDay();
+  const diff = weekday === 0 ? -6 : 1 - weekday;
+  d.setDate(d.getDate() + diff);
+  return getLocalDateKey(d);
+}
+
 export function shiftDateKey(key: string, days: number): string {
   const d = new Date(`${key}T12:00:00`);
   d.setDate(d.getDate() + days);

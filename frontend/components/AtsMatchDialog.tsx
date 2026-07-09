@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { fetchAtsMatch } from "@/lib/check-ats-client";
+import { updateResumeAiCosts } from "@/lib/supabase/services/resumes";
 import type { AnalysisResult } from "@/lib/types/resume";
 import type { AtsMatchResult } from "@/lib/types/ats-match";
 
@@ -19,6 +20,8 @@ interface AtsMatchDialogProps {
   useOpenRouter: boolean;
   /** When set, dialog shows this result without re-fetching (e.g. auto ATS after resume). */
   initialAts?: AtsMatchResult;
+  resumeRecordId?: string;
+  onAtsSaved?: (payload: { atsResult: AtsMatchResult; atsCostUsd?: number }) => void;
   onError: (message: string) => void;
 }
 
@@ -99,6 +102,8 @@ export default function AtsMatchDialog({
   apiProvider,
   useOpenRouter,
   initialAts,
+  resumeRecordId,
+  onAtsSaved,
   onError,
 }: AtsMatchDialogProps) {
   const [mounted, setMounted] = useState(false);
@@ -169,7 +174,20 @@ export default function AtsMatchDialog({
           useOpenRouter,
           accessToken: session.access_token,
         });
-        if (!cancelled) setAts(result.ats);
+        if (!cancelled) {
+          setAts(result.ats);
+          onAtsSaved?.({ atsResult: result.ats, atsCostUsd: result.atsCostUsd });
+          if (resumeRecordId) {
+            try {
+              await updateResumeAiCosts(resumeRecordId, {
+                atsScore: result.ats.score,
+                atsCostUsd: result.atsCostUsd,
+              });
+            } catch (error) {
+              console.warn("Failed to save ATS score to history:", error);
+            }
+          }
+        }
       } catch (err) {
         if (!cancelled) {
           onErrorRef.current(
@@ -185,7 +203,7 @@ export default function AtsMatchDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, resume, jobDescription, apiModel, apiProvider, useOpenRouter, initialAts]);
+  }, [open, resume, jobDescription, apiModel, apiProvider, useOpenRouter, initialAts, resumeRecordId, onAtsSaved]);
 
   if (!open || !mounted) return null;
 

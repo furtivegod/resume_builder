@@ -145,8 +145,14 @@ export function formatAiCostBreakdown(parts: {
   extractCostUsd?: number;
   generationCostUsd?: number;
   atsCostUsd?: number;
+  answersCostUsd?: number;
 }): string {
-  const total = sumCosts(parts.extractCostUsd, parts.generationCostUsd, parts.atsCostUsd);
+  const total = sumCosts(
+    parts.extractCostUsd,
+    parts.generationCostUsd,
+    parts.atsCostUsd,
+    parts.answersCostUsd
+  );
   if (total <= 0) return "";
 
   const detail: string[] = [];
@@ -158,6 +164,9 @@ export function formatAiCostBreakdown(parts: {
   }
   if (parts.atsCostUsd && parts.atsCostUsd > 0) {
     detail.push(`ATS ${formatCostUsd(parts.atsCostUsd)}`);
+  }
+  if (parts.answersCostUsd && parts.answersCostUsd > 0) {
+    detail.push(`answers ${formatCostUsd(parts.answersCostUsd)}`);
   }
 
   const totalLabel = formatCostUsd(total);

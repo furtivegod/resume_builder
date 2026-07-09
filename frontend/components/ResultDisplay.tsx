@@ -10,7 +10,6 @@ import { DEFAULT_JOBSITE, type JobsiteId } from "@/lib/jobsites";
 import { formatPdfSaveMessage, saveCoverLetterPdfToDownloadsFolder, saveGeneratedResumeToDownloads } from "@/lib/pdf-download";
 import { formatSupabaseConnectionError, isSupabaseNetworkError } from "@/lib/supabase/network";
 import { formatProviderLabel, getModelProvider } from "@/lib/openrouter-shared";
-import { apiUrl } from "@/lib/api-config";
 
 export interface QuestionAnswer {
   question: string;

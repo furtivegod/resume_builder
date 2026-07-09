@@ -56,31 +56,26 @@ ${questionsText}
 
 Return a JSON array with one object per question in the same order: [{"question": "exact question text", "answer": "your answer based on resume"}]`;
 
+    const messages: AIMessage[] = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ];
+
+    const aiResp = await callAI({
+      useOpenRouter: aiRequest.useOpenRouter,
+      model: selectedModel,
+      ...(aiRequest.provider ? { provider: aiRequest.provider } : {}),
+      messages,
+      temperature: 0.3,
+      max_tokens: 2048,
+      tryParseJson: true,
+    });
+
     let jsonText: string;
-
-    try {
-      const messages: AIMessage[] = [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ];
-
-      const aiResp = await callAI({
-        useOpenRouter: aiRequest.useOpenRouter,
-        model: selectedModel,
-        ...(aiRequest.provider ? { provider: aiRequest.provider } : {}),
-        messages,
-        temperature: 0.3,
-        max_tokens: 2048,
-        tryParseJson: true,
-      });
-
-      if (aiResp.json) {
-        jsonText = typeof aiResp.json === "string" ? aiResp.json : JSON.stringify(aiResp.json);
-      } else {
-        jsonText = aiResp.text || "";
-      }
-    } catch (err) {
-      throw err;
+    if (aiResp.json) {
+      jsonText = typeof aiResp.json === "string" ? aiResp.json : JSON.stringify(aiResp.json);
+    } else {
+      jsonText = aiResp.text || "";
     }
 
     let parsed: { answers?: { question: string; answer: string }[] } | { question: string; answer: string }[];
@@ -103,7 +98,10 @@ Return a JSON array with one object per question in the same order: [{"question"
       return { question: q, answer: "Could not generate an answer for this question." };
     });
 
-    return NextResponse.json({ answers });
+    return NextResponse.json({
+      answers,
+      ...(aiResp.costUsd != null ? { answersCostUsd: aiResp.costUsd } : {}),
+    });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

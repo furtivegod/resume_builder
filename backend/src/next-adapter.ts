@@ -37,7 +37,7 @@ async function sendWebResponse(res: ExpressResponse, webResponse: globalThis.Res
 
 export function registerRoute(
   app: Express,
-  method: "get" | "post",
+  method: "get" | "post" | "patch" | "delete",
   path: string,
   handler: RouteHandler | (() => Promise<Response>)
 ) {

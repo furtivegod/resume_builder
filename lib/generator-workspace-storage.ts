@@ -34,6 +34,7 @@ export interface StoredAnalysisSession {
   extractCostUsd?: number;
   generationCostUsd?: number;
   atsCostUsd?: number;
+  answersCostUsd?: number;
 }
 
 export interface GeneratorWorkspaceSnapshot {

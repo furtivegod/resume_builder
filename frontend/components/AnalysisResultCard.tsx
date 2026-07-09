@@ -33,6 +33,7 @@ export interface AnalysisSessionView {
   result: AnalysisResult | null;
   downloading?: boolean;
   downloadError?: string | null;
+  resumeId?: string;
   providerUsed?: string;
   modelUsed?: string;
   extractMs?: number;
@@ -44,6 +45,7 @@ export interface AnalysisSessionView {
   extractCostUsd?: number;
   generationCostUsd?: number;
   atsCostUsd?: number;
+  answersCostUsd?: number;
 }
 
 interface AnalysisResultCardProps {
@@ -52,6 +54,10 @@ interface AnalysisResultCardProps {
   onGenerateAnswers: (id: string) => void;
   onClose: (id: string) => void;
   onError?: (message: string) => void;
+  onAtsSaved?: (
+    sessionId: string,
+    payload: { atsResult: AtsMatchResult; atsCostUsd?: number }
+  ) => void;
 }
 
 type GeneratePhase = "analyze" | "pdf" | null;
@@ -164,6 +170,7 @@ export default function AnalysisResultCard({
   onGenerateAnswers,
   onClose,
   onError,
+  onAtsSaved,
 }: AnalysisResultCardProps) {
   const [jdOpen, setJdOpen] = useState(false);
   const [atsOpen, setAtsOpen] = useState(false);
@@ -192,12 +199,14 @@ export default function AnalysisResultCard({
     session.atsError ||
     session.extractCostUsd != null ||
     session.generationCostUsd != null ||
-    session.atsCostUsd != null;
+    session.atsCostUsd != null ||
+    session.answersCostUsd != null;
 
   const aiCostLabel = formatAiCostBreakdown({
     extractCostUsd: session.extractCostUsd,
     generationCostUsd: session.generationCostUsd,
     atsCostUsd: session.atsCostUsd,
+    answersCostUsd: session.answersCostUsd,
   });
 
   return (
@@ -224,6 +233,8 @@ export default function AnalysisResultCard({
         apiProvider={session.aiProvider}
         useOpenRouter={session.useOpenRouter}
         initialAts={session.atsResult ?? undefined}
+        resumeRecordId={session.resumeId}
+        onAtsSaved={(payload) => onAtsSaved?.(session.id, payload)}
         onError={(message) => onError?.(message)}
       />
       <article

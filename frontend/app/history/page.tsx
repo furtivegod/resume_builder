@@ -29,8 +29,19 @@ import type { UpdatedResume } from "@/lib/types/resume";
 import { ToastContainer, useToast } from "@/components/Toast";
 import FormattedJobDescription from "@/components/FormattedJobDescription";
 import { prepareJobDescriptionForDisplay } from "@/lib/normalize-job-description";
+import { formatJobDescriptionForCopy } from "@/lib/format-job-description-for-copy";
+import { formatAiCostBreakdown } from "@/lib/ai-usage";
+import { atsScoreTextClass, formatAtsScoreLabel } from "@/lib/check-ats-client";
+import { formatJobWorkTypeLabel } from "@/lib/prompts/job-page-extract";
+import { jobWorkTypeBadgeClass } from "@/lib/job-work-type";
+import { parseStoredJobTypes } from "@/lib/resume-record-metadata";
+import { buildInterviewHistoryRows } from "@/lib/interview-history";
+import InterviewHistoryTable, {
+  InterviewHistoryFilters,
+} from "@/components/history/InterviewHistoryTable";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+type HistoryTab = "bids" | "interviews";
 const DEFAULT_PAGE_SIZE = 10;
 
 import { formatProviderLabel, getSortedProviders, FALLBACK_OPENROUTER_MODELS } from "@/lib/openrouter-shared";
@@ -71,6 +82,19 @@ function jobsiteLabel(id: string | null): string {
   return JOBSITES.find((site) => site.id === id)?.label ?? id;
 }
 
+function formatRecordAiCost(record: ResumeRecord): string {
+  return formatAiCostBreakdown({
+    extractCostUsd: record.extract_cost_usd ?? undefined,
+    generationCostUsd: record.generation_cost_usd ?? undefined,
+    atsCostUsd: record.ats_cost_usd ?? undefined,
+    answersCostUsd: record.answers_cost_usd ?? undefined,
+  });
+}
+
+function recordJobTypes(record: ResumeRecord) {
+  return parseStoredJobTypes(record.job_types);
+}
+
 function toDateOnly(iso: string): string {
   return iso.slice(0, 10);
 }
@@ -96,10 +120,14 @@ function matchesSearch(
     record.job_link,
     record.ai_type,
     record.model,
+    record.salary,
+    record.posted_date,
     jobsiteLabel(record.job_site),
     record.bid_status,
     formatListDate(record.created_at),
     toDateOnly(record.created_at),
+    formatRecordAiCost(record),
+    ...recordJobTypes(record).map((type) => formatJobWorkTypeLabel(type)),
     ...recordInterviews.flatMap((row) => [
       row.caller,
       row.interviewer,
@@ -336,6 +364,14 @@ export default function HistoryPage() {
   const [filterInterviewer, setFilterInterviewer] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  const [historyTab, setHistoryTab] = useState<HistoryTab>("bids");
+  const [interviewSearchQuery, setInterviewSearchQuery] = useState("");
+  const [interviewFilterStatus, setInterviewFilterStatus] = useState<BidStatus | "">("");
+  const [interviewFilterCaller, setInterviewFilterCaller] = useState("");
+  const [interviewFilterDateFrom, setInterviewFilterDateFrom] = useState("");
+  const [interviewFilterDateTo, setInterviewFilterDateTo] = useState("");
+  const [interviewPage, setInterviewPage] = useState(1);
+  const [interviewPageSize, setInterviewPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const { toasts, showToast, dismissToast } = useToast();
 
   const interviewsByResume = useMemo(() => {
@@ -429,6 +465,86 @@ export default function HistoryPage() {
     return filteredRecords.slice(start, start + pageSize);
   }, [filteredRecords, page, pageSize]);
 
+  const interviewHistoryRows = useMemo(
+    () => buildInterviewHistoryRows(interviews, records),
+    [interviews, records]
+  );
+
+  const filteredInterviewRows = useMemo(() => {
+    return interviewHistoryRows.filter((row) => {
+      if (interviewFilterStatus && row.status !== interviewFilterStatus) return false;
+
+      if (
+        interviewFilterCaller.trim() &&
+        !row.caller.toLowerCase().includes(interviewFilterCaller.trim().toLowerCase())
+      ) {
+        return false;
+      }
+
+      if (
+        interviewFilterDateFrom &&
+        toDateOnly(row.latestDate) < interviewFilterDateFrom
+      ) {
+        return false;
+      }
+
+      if (interviewFilterDateTo && toDateOnly(row.latestDate) > interviewFilterDateTo) {
+        return false;
+      }
+
+      const q = interviewSearchQuery.trim().toLowerCase();
+      if (!q) return true;
+
+      const haystack = [
+        row.company,
+        row.jobTitle,
+        row.caller,
+        row.pipelineLabel,
+        row.status,
+        formatInterviewDate(row.latestDate),
+        toDateOnly(row.latestDate),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(q);
+    });
+  }, [
+    interviewHistoryRows,
+    interviewSearchQuery,
+    interviewFilterStatus,
+    interviewFilterCaller,
+    interviewFilterDateFrom,
+    interviewFilterDateTo,
+  ]);
+
+  const interviewTotalPages = Math.max(
+    1,
+    Math.ceil(filteredInterviewRows.length / interviewPageSize)
+  );
+
+  const paginatedInterviewRows = useMemo(() => {
+    const start = (interviewPage - 1) * interviewPageSize;
+    return filteredInterviewRows.slice(start, start + interviewPageSize);
+  }, [filteredInterviewRows, interviewPage, interviewPageSize]);
+
+  const hasInterviewActiveFilters =
+    interviewSearchQuery.trim().length > 0 ||
+    interviewFilterStatus !== "" ||
+    interviewFilterCaller.trim().length > 0 ||
+    interviewFilterDateFrom !== "" ||
+    interviewFilterDateTo !== "";
+
+  const clearInterviewFilters = () => {
+    setInterviewSearchQuery("");
+    setInterviewFilterStatus("");
+    setInterviewFilterCaller("");
+    setInterviewFilterDateFrom("");
+    setInterviewFilterDateTo("");
+    setInterviewPage(1);
+  };
+
   const hasActiveFilters =
     searchQuery.trim().length > 0 ||
     filterBidStatus !== "" ||
@@ -478,10 +594,27 @@ export default function HistoryPage() {
   }, [page, totalPages]);
 
   useEffect(() => {
-    if (!authLoading && user) {
+    setInterviewPage(1);
+  }, [
+    interviewSearchQuery,
+    interviewFilterStatus,
+    interviewFilterCaller,
+    interviewFilterDateFrom,
+    interviewFilterDateTo,
+    interviewPageSize,
+  ]);
+
+  useEffect(() => {
+    if (interviewPage > interviewTotalPages) {
+      setInterviewPage(interviewTotalPages);
+    }
+  }, [interviewPage, interviewTotalPages]);
+
+  useEffect(() => {
+    if (!authLoading && user?.id) {
       loadRecords();
     }
-  }, [authLoading, user]);
+  }, [authLoading, user?.id]);
 
   const loadRecords = async () => {
     if (!user) return;
@@ -510,13 +643,8 @@ export default function HistoryPage() {
     }
   };
 
-  const toggleExpand = async (record: ResumeRecord) => {
-    if (expandedId === record.id) {
-      setExpandedId(null);
-      setInterviewFormMode(null);
-      setExpandedResumeData(null);
-      return;
-    }
+  const expandRecord = async (record: ResumeRecord) => {
+    if (expandedId === record.id) return;
 
     setExpandedId(record.id);
     setInterviewFormMode(null);
@@ -539,10 +667,41 @@ export default function HistoryPage() {
     }
   };
 
-  const handleCopyJd = async () => {
-    if (!expandedJd) return;
+  const toggleExpand = async (record: ResumeRecord) => {
+    if (expandedId === record.id) {
+      setExpandedId(null);
+      setInterviewFormMode(null);
+      setExpandedResumeData(null);
+      return;
+    }
+    await expandRecord(record);
+  };
+
+  const openBidFromInterview = async (resumeId: string) => {
+    const record = records.find((row) => row.id === resumeId);
+    if (!record) return;
+    setHistoryTab("bids");
+    await expandRecord(record);
+    window.requestAnimationFrame(() => {
+      document.getElementById(`bid-${resumeId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const jdCopyText = (record: ResumeRecord) =>
+    formatJobDescriptionForCopy(expandedJd, {
+      jobTitle: record.job_title,
+      companyName: record.job_company,
+      salary: record.salary,
+      postedDate: record.posted_date,
+      jobTypes: recordJobTypes(record),
+      requiresTravel: record.requires_travel,
+    });
+
+  const handleCopyJd = async (record: ResumeRecord) => {
+    const text = jdCopyText(record);
+    if (!text) return;
     try {
-      await navigator.clipboard.writeText(expandedJd);
+      await navigator.clipboard.writeText(text);
       setJdCopied(true);
       setTimeout(() => setJdCopied(false), 2000);
     } catch {
@@ -551,13 +710,14 @@ export default function HistoryPage() {
   };
 
   const handleDownloadJd = async (record: ResumeRecord) => {
-    if (!expandedJd) return;
+    const text = jdCopyText(record);
+    if (!text) return;
     setJdDownloadingId(record.id);
     try {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      await saveTextToDownloadsFolder(expandedJd, {
+      await saveTextToDownloadsFolder(text, {
         companyName: record.job_company || "",
         jobRole: record.job_title || "",
         fileName: "Job Description.txt",
@@ -682,13 +842,37 @@ export default function HistoryPage() {
   return (
     <main className="page-shell">
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-      <div className="mx-auto w-full max-w-7xl">
+      <div className="mx-auto w-full max-w-[1600px]">
         <div className="glass-panel overflow-hidden">
           <div className="page-header">
-            <h2 className="page-title">Resume History</h2>
+            <h2 className="page-title">History</h2>
             <p className="page-subtitle">
-              Job bids and interview notes saved to cloud storage
+              Resume bids and interview progress saved to cloud storage
             </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setHistoryTab("bids")}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+                  historyTab === "bids"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600/60 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                }`}
+              >
+                Bid history
+              </button>
+              <button
+                type="button"
+                onClick={() => setHistoryTab("interviews")}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+                  historyTab === "interviews"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600/60 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                }`}
+              >
+                Interview history
+              </button>
+            </div>
           </div>
 
           <div className="p-6">
@@ -696,6 +880,110 @@ export default function HistoryPage() {
               <div className="flex justify-center py-12">
                 <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
               </div>
+            ) : historyTab === "interviews" ? (
+              <>
+                <InterviewHistoryFilters
+                  searchQuery={interviewSearchQuery}
+                  onSearchChange={setInterviewSearchQuery}
+                  filterStatus={interviewFilterStatus}
+                  onStatusChange={setInterviewFilterStatus}
+                  filterCaller={interviewFilterCaller}
+                  onCallerChange={setInterviewFilterCaller}
+                  filterDateFrom={interviewFilterDateFrom}
+                  onDateFromChange={setInterviewFilterDateFrom}
+                  filterDateTo={interviewFilterDateTo}
+                  onDateToChange={setInterviewFilterDateTo}
+                />
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-300">
+                  <span>
+                    {filteredInterviewRows.length === 0
+                      ? "No matching interviews"
+                      : `Showing ${(interviewPage - 1) * interviewPageSize + 1}–${Math.min(interviewPage * interviewPageSize, filteredInterviewRows.length)} of ${filteredInterviewRows.length}`}
+                    {interviewHistoryRows.length !== filteredInterviewRows.length
+                      ? ` (${interviewHistoryRows.length} total)`
+                      : ""}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {hasInterviewActiveFilters ? (
+                      <button type="button" onClick={clearInterviewFilters} className="btn-compact">
+                        Clear filters
+                      </button>
+                    ) : null}
+                    <label className="flex items-center gap-1.5">
+                      <span>Per page</span>
+                      <select
+                        value={interviewPageSize}
+                        onChange={(e) => setInterviewPageSize(Number(e.target.value))}
+                        className="select-compact min-w-[4.5rem] py-1 text-xs"
+                      >
+                        {PAGE_SIZE_OPTIONS.map((size) => (
+                          <option key={size} value={size}>
+                            {size}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+                {filteredInterviewRows.length === 0 ? (
+                  <p className="py-12 text-center text-slate-500 dark:text-slate-300">
+                    {interviewHistoryRows.length === 0
+                      ? "No interview records yet. Add interview info from a bid in Bid history."
+                      : "No interviews match your search or filters."}
+                  </p>
+                ) : (
+                  <InterviewHistoryTable
+                    rows={paginatedInterviewRows}
+                    onOpenBid={openBidFromInterview}
+                  />
+                )}
+                {filteredInterviewRows.length > 0 && interviewTotalPages > 1 ? (
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 dark:border-slate-600/60 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setInterviewPage((p) => Math.max(1, p - 1))}
+                      disabled={interviewPage <= 1}
+                      className="btn-soft text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Previous
+                    </button>
+                    <div className="flex flex-wrap items-center justify-center gap-1">
+                      {interviewTotalPages <= 7 ? (
+                        Array.from({ length: interviewTotalPages }, (_, i) => i + 1).map(
+                          (pageNum) => (
+                            <button
+                              key={pageNum}
+                              type="button"
+                              onClick={() => setInterviewPage(pageNum)}
+                              className={`min-w-8 rounded-lg px-2 py-1 text-xs ${
+                                pageNum === interviewPage
+                                  ? "bg-blue-600 font-semibold text-white"
+                                  : "border border-slate-200 dark:border-slate-600/60 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          )
+                        )
+                      ) : (
+                        <span className="px-2 text-xs text-slate-600 dark:text-slate-300">
+                          Page {interviewPage} of {interviewTotalPages}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setInterviewPage((p) => Math.min(interviewTotalPages, p + 1))
+                      }
+                      disabled={interviewPage >= interviewTotalPages}
+                      className="btn-soft text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </div>
+                ) : null}
+              </>
             ) : records.length === 0 ? (
               <p className="py-12 text-center text-slate-500 dark:text-slate-300">No resumes yet. Generate one from the Generator page.</p>
             ) : (
@@ -888,6 +1176,8 @@ export default function HistoryPage() {
                 {paginatedRecords.map((record) => {
                   const recordInterviews = interviewsByResume.get(record.id) ?? [];
                   const isExpanded = expandedId === record.id;
+                  const jobTypes = recordJobTypes(record);
+                  const aiCostLabel = formatRecordAiCost(record);
                   const showAddForm =
                     interviewFormMode?.kind === "add" && interviewFormMode.resumeId === record.id;
                   const editingInterviewId =
@@ -896,7 +1186,7 @@ export default function HistoryPage() {
                       : null;
 
                   return (
-                    <div key={record.id} className="card overflow-hidden">
+                    <div key={record.id} id={`bid-${record.id}`} className="card overflow-hidden">
                       <div className="flex items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -919,14 +1209,48 @@ export default function HistoryPage() {
                             <div className="flex flex-wrap items-center gap-1">
                               <span className="badge">{formatListDate(record.created_at)}</span>
                               <span className="badge">{jobsiteLabel(record.job_site)}</span>
+                              {record.salary ? (
+                                <span className="badge max-w-[12rem] truncate">{record.salary}</span>
+                              ) : null}
+                              {record.posted_date ? (
+                                <span className="badge">Posted {record.posted_date}</span>
+                              ) : null}
+                              {jobTypes.map((type) => (
+                                <span
+                                  key={type}
+                                  className={`badge ${jobWorkTypeBadgeClass(type)}`}
+                                >
+                                  {formatJobWorkTypeLabel(type)}
+                                </span>
+                              ))}
+                              {record.requires_travel ? (
+                                <span className="badge border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800/50 dark:bg-violet-950/40 dark:text-violet-300">
+                                  Travel
+                                </span>
+                              ) : null}
                               <span className="badge">{record.ai_type ?? "AI"}</span>
                               {record.model && <span className="badge max-w-[9rem] truncate">{record.model}</span>}
+                              {record.ats_score != null ? (
+                                <span
+                                  className={`badge font-semibold ${atsScoreTextClass(record.ats_score)} bg-slate-100 dark:bg-slate-800/80`}
+                                >
+                                  ATS {record.ats_score} · {formatAtsScoreLabel(record.ats_score)}
+                                </span>
+                              ) : null}
                               {recordInterviews.length > 0 && (
                                 <span className="badge border-blue-200 bg-blue-50 text-blue-700">
                                   {recordInterviews.length} interview{recordInterviews.length === 1 ? "" : "s"}
                                 </span>
                               )}
                             </div>
+                            {aiCostLabel ? (
+                              <p className="mt-1 w-full text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                                <span className="font-medium text-slate-500 dark:text-slate-400">
+                                  AI cost
+                                </span>{" "}
+                                {aiCostLabel}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
@@ -958,14 +1282,14 @@ export default function HistoryPage() {
                             </div>
                           ) : (
                             <div className="space-y-6">
-                              <div className="grid gap-4 lg:grid-cols-2">
-                                <div>
+                              <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
+                                <div className="flex min-h-0 flex-col">
                                   <div className="mb-2 flex items-center justify-between gap-2">
                                     <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Job Description</h4>
                                     <div className="flex items-center gap-1">
                                       <IconButton
                                         title={jdCopied ? "Copied" : "Copy job description"}
-                                        onClick={() => void handleCopyJd()}
+                                        onClick={() => void handleCopyJd(record)}
                                         disabled={!expandedJd.trim()}
                                       >
                                         {jdCopied ? <CheckIcon /> : <CopyIcon />}
@@ -983,15 +1307,19 @@ export default function HistoryPage() {
                                       </IconButton>
                                     </div>
                                   </div>
-                                  <div className="surface-inset max-h-[28rem] overflow-auto p-4">
+                                  <div className="surface-inset h-[28rem] min-h-0 overflow-auto p-4">
                                     <FormattedJobDescription
                                       jobDescription={prepareJobDescriptionForDisplay(expandedJd)}
                                       jobTitle={record.job_title ?? undefined}
                                       companyName={record.job_company ?? undefined}
+                                      salary={record.salary ?? undefined}
+                                      postedDate={record.posted_date ?? undefined}
+                                      jobTypes={jobTypes}
+                                      requiresTravel={Boolean(record.requires_travel)}
                                     />
                                   </div>
                                 </div>
-                                <div>
+                                <div className="flex min-h-0 flex-col">
                                   <div className="mb-2 flex items-center justify-between gap-2">
                                     <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Resume JSON</h4>
                                     <IconButton
@@ -1006,7 +1334,7 @@ export default function HistoryPage() {
                                       )}
                                     </IconButton>
                                   </div>
-                                  <pre className="surface-inset max-h-64 overflow-auto p-3 text-xs whitespace-pre-wrap">{expandedResume}</pre>
+                                  <pre className="surface-inset h-[28rem] min-h-0 overflow-auto p-3 text-xs whitespace-pre-wrap">{expandedResume}</pre>
                                 </div>
                               </div>
 

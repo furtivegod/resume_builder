@@ -1,4 +1,4 @@
-type Industry = "healthcare" | "fintech" | "ecommerce";
+type Industry = "healthcare" | "fintech" | "ecommerce" | "defense_gov";
 
 const HEALTHCARE_BUZZWORDS = `Healthcare Interoperability & Standards
 • HL7 v2
@@ -193,10 +193,65 @@ Customer Experience & Analytics
 • Customer Retention
 • Loyalty Programs`;
 
+const DEFENSE_GOV_BUZZWORDS = `Defense, Government & Intelligence Community
+Mission & Systems Engineering
+• Mission Engineering
+• Mission-Critical Systems
+• Systems Engineering
+• Intelligence Integration
+• Data Integration Pipelines
+• Enterprise Integration
+• Full-Stack Mission Applications
+• Stakeholder-Facing Technical Delivery
+• Requirements Traceability
+• Technical Documentation
+
+Intelligence Community & National Security (domain vocabulary only — do not claim clearance)
+• Intelligence Community (IC)
+• National Security Mission Support
+• Government Mission Systems
+• Federal Technology Programs
+• Secure Software Development
+• Classified-Environment Readiness (only if profile supports secure/compliance work — never claim active clearance)
+• Cross-Agency Data Sharing
+• Analyst-Facing Tools
+• Operational Technology Support
+
+Defense & Federal Engineering
+• DevSecOps
+• Secure SDLC
+• Authority to Operate (ATO) awareness
+• FedRAMP-aligned practices
+• RMF / NIST frameworks (when JD-relevant)
+• DISA STIG awareness
+• Zero Trust Architecture
+• Role-Based Access Control (RBAC)
+• Audit Logging & Compliance Controls
+• High-Availability Government Systems
+
+Full-Stack & Platform (common JD stack)
+• Angular
+• React
+• Vue.js
+• Node.js
+• Python
+• C#
+• Java
+• JavaScript / TypeScript
+• HTML / CSS
+• jQuery
+• REST / CRUD APIs
+• PostgreSQL / MongoDB
+• Nginx / Apache
+• Git / GitHub / GitLab
+• CI/CD Pipelines
+• Containerization & Cloud Deployment`;
+
 const INDUSTRY_BLOCKS: Record<Industry, string> = {
   healthcare: HEALTHCARE_BUZZWORDS,
   fintech: FINTECH_BUZZWORDS,
   ecommerce: ECOMMERCE_BUZZWORDS,
+  defense_gov: DEFENSE_GOV_BUZZWORDS,
 };
 
 /** Pick industry vocabulary blocks that match the JD (reduces prompt size vs sending all three). */
@@ -224,6 +279,13 @@ export function detectResumeIndustries(jd: string): Industry[] {
     )
   ) {
     found.add("ecommerce");
+  }
+  if (
+    /\b(defense|defence|government|federal|intelligence community|\bic\b|national security|mission engineering|dod|department of defense|mitre|clearance|ts\/sci|top secret|polygraph|intel integration|mission.system|govcon|government contract|federal contractor|intelligence analyst|secure facility|classified)\b/.test(
+      lower
+    )
+  ) {
+    found.add("defense_gov");
   }
 
   return [...found];

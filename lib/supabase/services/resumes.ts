@@ -2,6 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import type { BidStatus, ResumeRecord } from "@/lib/supabase/database.types";
 import type { JobsiteId } from "@/lib/jobsites";
+import type { JobWorkType } from "@/lib/prompts/job-page-extract";
+import {
+  jobTypesForStorage,
+  optionalAtsScore,
+  optionalCostUsd,
+  optionalText,
+} from "@/lib/resume-record-metadata";
 import {
   uploadJd,
   uploadResumeJson,
@@ -20,6 +27,44 @@ export interface CreateResumeParams {
   jobLink?: string | null;
   jobTitle?: string | null;
   jobCompany?: string | null;
+  salary?: string | null;
+  postedDate?: string | null;
+  jobTypes?: JobWorkType[] | null;
+  requiresTravel?: boolean | null;
+  extractCostUsd?: number | null;
+  generationCostUsd?: number | null;
+  atsCostUsd?: number | null;
+  answersCostUsd?: number | null;
+}
+
+export interface UpdateResumeAiCostsParams {
+  extractCostUsd?: number | null;
+  generationCostUsd?: number | null;
+  atsCostUsd?: number | null;
+  answersCostUsd?: number | null;
+  atsScore?: number | null;
+}
+
+function buildResumeInsertRow(params: CreateResumeParams, resumeId: string) {
+  return {
+    id: resumeId,
+    user_id: params.userId,
+    ai_type: params.aiType ?? null,
+    model: params.model ?? null,
+    job_site: params.jobSite ?? null,
+    job_link: params.jobLink ?? null,
+    job_title: optionalText(params.jobTitle),
+    job_company: optionalText(params.jobCompany),
+    salary: optionalText(params.salary),
+    posted_date: optionalText(params.postedDate),
+    job_types: jobTypesForStorage(params.jobTypes),
+    requires_travel: Boolean(params.requiresTravel),
+    extract_cost_usd: optionalCostUsd(params.extractCostUsd),
+    generation_cost_usd: optionalCostUsd(params.generationCostUsd),
+    ats_cost_usd: optionalCostUsd(params.atsCostUsd),
+    answers_cost_usd: optionalCostUsd(params.answersCostUsd),
+    bid_status: "applied" as const,
+  };
 }
 
 export async function createResumeWithArtifacts(
@@ -39,18 +84,46 @@ export async function createResumeWithArtifacts(
   const { data, error } = await client
     .from("resume_history")
     .insert({
-      id: resumeId,
-      user_id: params.userId,
-      ai_type: params.aiType ?? null,
-      model: params.model ?? null,
-      job_site: params.jobSite ?? null,
-      job_link: params.jobLink ?? null,
-      job_title: params.jobTitle ?? null,
-      job_company: params.jobCompany ?? null,
+      ...buildResumeInsertRow(params, resumeId),
       jd_file_path: jdFilePath,
       resume_file_path: resumeFilePath,
-      bid_status: "applied",
     })
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as ResumeRecord;
+}
+
+export async function updateResumeAiCosts(
+  resumeId: string,
+  costs: UpdateResumeAiCostsParams,
+  client: SupabaseClient = supabase
+): Promise<ResumeRecord> {
+  const updates: Record<string, number | null | string> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (costs.extractCostUsd !== undefined) {
+    updates.extract_cost_usd = optionalCostUsd(costs.extractCostUsd);
+  }
+  if (costs.generationCostUsd !== undefined) {
+    updates.generation_cost_usd = optionalCostUsd(costs.generationCostUsd);
+  }
+  if (costs.atsCostUsd !== undefined) {
+    updates.ats_cost_usd = optionalCostUsd(costs.atsCostUsd);
+  }
+  if (costs.answersCostUsd !== undefined) {
+    updates.answers_cost_usd = optionalCostUsd(costs.answersCostUsd);
+  }
+  if (costs.atsScore !== undefined) {
+    updates.ats_score = optionalAtsScore(costs.atsScore);
+  }
+
+  const { data, error } = await client
+    .from("resume_history")
+    .update(updates)
+    .eq("id", resumeId)
     .select("*")
     .single();
 

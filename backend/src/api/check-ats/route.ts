@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAIConfigured, resolveAIRequest } from "@/lib/ai-api";
+import {
+  parseUseOpenRouter,
+  requireAIConfigured,
+  resolveExtractMaxTokens,
+  resolveExtractModel,
+  resolveExtractProvider,
+} from "@/lib/ai-api";
 import { callAI, formatAIProviderError } from "@/lib/ai-provider";
 import type { AIMessage } from "@/lib/ai-provider";
 import { buildAtsMatchPrompt } from "@/lib/prompts/ats-match";
@@ -16,8 +22,6 @@ export async function POST(request: NextRequest) {
     const {
       resume,
       jd,
-      apiModel,
-      apiProvider,
       useOpenRouter: useOpenRouterBody,
     } = await request.json();
 
@@ -33,12 +37,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const aiRequest = resolveAIRequest({
-      useOpenRouter: useOpenRouterBody,
-      apiModel,
-      apiProvider,
-    });
-    requireAIConfigured(aiRequest.useOpenRouter, aiRequest.provider);
+    const useOpenRouter = parseUseOpenRouter(useOpenRouterBody);
+    const extractProvider = resolveExtractProvider(useOpenRouter);
+    requireAIConfigured(useOpenRouter, extractProvider);
+
+    const extractModel = resolveExtractModel(useOpenRouter);
 
     const resumeJson = JSON.stringify(resume, null, 2);
     const messages: AIMessage[] = [
@@ -54,16 +57,12 @@ export async function POST(request: NextRequest) {
     ];
 
     const aiResp = await callAI({
-      useOpenRouter: aiRequest.useOpenRouter,
-      model: aiRequest.model,
-      ...(aiRequest.provider ? { provider: aiRequest.provider } : {}),
+      useOpenRouter,
+      model: extractModel,
+      ...(extractProvider ? { provider: extractProvider } : {}),
       messages,
       temperature: 0.2,
-      max_tokens:
-        aiRequest.provider === "deepseek" ||
-        aiRequest.model.toLowerCase().includes("deepseek")
-          ? 4096
-          : 2048,
+      max_tokens: resolveExtractMaxTokens(),
       tryParseJson: true,
     });
 
@@ -79,7 +78,7 @@ export async function POST(request: NextRequest) {
         jsonPreview: aiResp.json ? JSON.stringify(aiResp.json).slice(0, 800) : null,
       });
       throw new Error(
-        "ATS analysis returned empty results. Try again or switch to a different AI model."
+        "ATS analysis returned empty results. Try again or check EXTRACT_MODEL / OPENROUTER_EXTRACT_MODEL in backend .env.local."
       );
     }
 

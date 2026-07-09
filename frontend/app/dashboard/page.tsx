@@ -73,10 +73,10 @@ export default function DashboardPage() {
   const [activePreset, setActivePreset] = useState<RangePreset>("month");
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!authLoading && user?.id) {
       void loadRecords();
     }
-  }, [authLoading, user]);
+  }, [authLoading, user?.id]);
 
   const loadRecords = async () => {
     if (!user) return;

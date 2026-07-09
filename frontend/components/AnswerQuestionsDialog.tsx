@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { apiUrl } from "@/lib/api-config";
+import { formatCostUsd } from "@/lib/ai-usage";
 import type { AnalysisResult } from "@/lib/types/resume";
 
 export interface QuestionAnswer {
@@ -19,6 +20,7 @@ interface AnswerQuestionsDialogProps {
   apiProvider: string;
   useOpenRouter: boolean;
   onError: (message: string) => void;
+  onAnswersCost?: (costUsd: number) => void;
 }
 
 export default function AnswerQuestionsDialog({
@@ -29,12 +31,14 @@ export default function AnswerQuestionsDialog({
   apiProvider,
   useOpenRouter,
   onError,
+  onAnswersCost,
 }: AnswerQuestionsDialogProps) {
   const [mounted, setMounted] = useState(false);
   const [questionsText, setQuestionsText] = useState("");
   const [answers, setAnswers] = useState<QuestionAnswer[]>([]);
   const [loading, setLoading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [answersCostUsd, setAnswersCostUsd] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     setMounted(true);
@@ -59,6 +63,7 @@ export default function AnswerQuestionsDialog({
       setQuestionsText("");
       setAnswers([]);
       setCopiedIndex(null);
+      setAnswersCostUsd(undefined);
     }
   }, [open]);
 
@@ -104,6 +109,10 @@ export default function AnswerQuestionsDialog({
       }
       const data = await res.json();
       setAnswers(data.answers || []);
+      if (typeof data.answersCostUsd === "number" && data.answersCostUsd > 0) {
+        setAnswersCostUsd(data.answersCostUsd);
+        onAnswersCost?.(data.answersCostUsd);
+      }
     } catch (err) {
       onError(err instanceof Error ? err.message : "Failed to generate answers");
     } finally {
@@ -168,6 +177,14 @@ export default function AnswerQuestionsDialog({
 
           {answers.length > 0 && (
             <div className="mt-5 space-y-4">
+              {answersCostUsd != null && answersCostUsd > 0 ? (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  AI cost for this run:{" "}
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">
+                    {formatCostUsd(answersCostUsd)}
+                  </span>
+                </p>
+              ) : null}
               {answers.map((qa, i) => (
                 <div
                   key={i}

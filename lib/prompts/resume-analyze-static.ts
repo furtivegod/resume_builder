@@ -155,6 +155,7 @@ WORK HISTORY RULES (GLOBAL) - CRITICAL UPDATE REQUIREMENTS
   - Generate fresh, JD-optimized content
 - Include all JD-required tools and technologies (add them even if not in original)
 - Optional / preferred/ bonus / nice-to-have JD items must also be included
+- Weave optional and preferred JD keywords into experience bullets, not only the skills list
 - Experience bullets must reflect:
   - Realistic timelines
   - Natural technical evolution
@@ -181,6 +182,27 @@ WORK HISTORY RULES (GLOBAL) - CRITICAL UPDATE REQUIREMENTS
     - Summary
     - Responsibilities
     - Achievements
+
+----------------------------------------
+JD KEYWORD INCORPORATION (MANDATORY)
+----------------------------------------
+- Parse the JD for mandatory, preferred, optional, and nice-to-have requirements.
+- Incorporate optional and preferred technical keywords into experience bullets AND hardSkills when supported by the candidate's profile (listed skills, projects, tools, or adjacent stack).
+- Prioritize weaving these into bullets when they appear in the JD and profile supports them:
+  - Frameworks: Angular, Vue, React, jQuery
+  - Languages: C#, Java, Python, TypeScript, JavaScript
+  - Web servers & ops: Nginx, Apache, CRUD APIs, REST
+  - Platform: CI/CD, DevSecOps, Git/GitHub/GitLab, PostgreSQL, MongoDB
+- Each incorporated technical keyword must appear in at least one experience bullet — not only in hardSkills.
+- When the JD targets defense, government, intelligence, or mission systems: use transferable engineering language (integration, secure delivery, mission-critical systems, stakeholder-facing technical work) without inventing sector credentials.
+
+NEVER FABRICATE (hard stop):
+- Security clearances or clearance status (Top Secret, TS/SCI, Secret, polygraph, SCI)
+- Specific employer, agency, or internship affiliations not in the profile (e.g. named defense contractors, MITRE internship)
+- On-site location eligibility, relocation willingness, or US citizenship not stated in the profile
+- Credentials, certifications, or programs the candidate does not have
+
+When the JD lists hard disqualifiers the candidate lacks, do not invent them — maximize honest overlap on technical stack, architecture, and transferable engineering outcomes instead.
 
 ----------------------------------------
 TECHNOLOGY TIMELINE RULES (STRICT)
@@ -227,8 +249,11 @@ Hard Skills (MANDATORY)
   - Otherwise omitted
 - Industry category:
   - Always included
-  - Must reflect healthcare for companies in the candidate's profile work history (up to five).
-  - refletct fintech or eCommerce if JD includes fintech or eCommerce industry.
+  - PRIMARY: reflect the JD's dominant industry or mission domain (defense, intelligence, healthcare, fintech, eCommerce, etc.)
+  - When the JD is defense, government, intelligence, or national-security focused: use Defense & Government vocabulary from INDUSTRY BUZZWORDS — do not default to healthcare from profile history alone
+  - When the JD is healthcare-focused AND the profile includes healthcare employers: include healthcare industry terms
+  - When the JD includes fintech or eCommerce: include fintech or eCommerce industry terms
+  - SECONDARY: include profile industry terms only when they strengthen credibility for this JD; de-emphasize unrelated profile industry noise (e.g. healthcare buzzwords on a defense JD unless the JD is healthcare-related)
 - Hard skills must:
   - Appear in experience bullets
   - Align with JD

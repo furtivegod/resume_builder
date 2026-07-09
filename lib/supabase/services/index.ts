@@ -6,6 +6,7 @@ export { syncCompanies } from "@/lib/supabase/services/user-companies";
 export { saveProfileForm } from "@/lib/supabase/services/save-profile";
 export {
   createResumeWithArtifacts,
+  updateResumeAiCosts,
   listResumes,
   updateResumeBidStatus,
   getResumeArtifacts,

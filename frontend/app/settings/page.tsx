@@ -25,10 +25,10 @@ export default function SettingsPage() {
   const { toasts, showToast, dismissToast } = useToast();
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!authLoading && user?.id) {
       void loadSettings();
     }
-  }, [authLoading, user]);
+  }, [authLoading, user?.id]);
 
   const loadSettings = async () => {
     if (!user) return;
