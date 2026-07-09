@@ -15,6 +15,7 @@ import {
   userEducationToResumeEducation,
   userProjectToResumeProject,
 } from "@/lib/mappers/profile-to-resume";
+import { generateId } from "@/lib/generate-id";
 import { resolveResumeTemplate, type ResumeTemplateId } from "@/lib/resume-templates";
 
 export interface EducationFormRow {
@@ -61,7 +62,7 @@ export interface ProfileFormState {
 }
 
 export function newClientId(): string {
-  return crypto.randomUUID();
+  return generateId();
 }
 
 export function createEmptyCompanyRow(): CompanyFormRow {

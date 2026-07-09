@@ -6,6 +6,7 @@ import type {
   ResumeRecord,
 } from "@/lib/supabase/database.types";
 import { DEFAULT_BID_STATUS } from "@/lib/supabase/database.types";
+import { generateId } from "@/lib/generate-id";
 import { updateResumeBidStatus } from "@/lib/supabase/services/resumes";
 
 export interface InterviewFormInput {
@@ -62,7 +63,7 @@ export async function createInterview(
   const { data, error } = await client
     .from("interview_history")
     .insert({
-      id: crypto.randomUUID(),
+      id: generateId(),
       user_id: userId,
       resume_id: input.resume_id ?? null,
       interview_date: input.interview_date,
